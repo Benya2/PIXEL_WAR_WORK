@@ -9,7 +9,9 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<button id="authButton">Log In</button>
 
+    
     <h1>Pixel war</h1> 
     
     <div id="userCount">Online Players: 0 (not work)</div>
@@ -50,6 +52,9 @@ const app = initializeApp(firebaseConfig);
         
         const ctx = game.getContext('2d');
         const gridCtx = game.getContext('2d');
+
+        let canPlacePixel = true; // Можно ли ставить пиксель
+        const reloadTime = 5; // Время перезарядки в секундах
         
         const colorList = [
             "#FFFFFF", "#B39DDB", "#9FA8DA", "#90CAF9", "#81D4FA", "#80DEEA",
@@ -97,7 +102,28 @@ const app = initializeApp(firebaseConfig);
 
             const pixelRef = doc(db, "pixels", `${pixel.x}-${pixel.y}`);
             setDoc(pixelRef, pixel, { merge: true });
+            startReload();
         }
+
+        // Функция перезарядки
+        function startReload() {
+            canPlacePixel = false;
+            let timeLeft = reloadTime;
+
+            reloadTimer.innerText = `Перезарядка: ${timeLeft} сек.`;
+
+            const countdown = setInterval(() => {
+                timeLeft--;
+                reloadTimer.innerText = `Перезарядка: ${timeLeft} сек.`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    canPlacePixel = true;
+                    reloadTimer.innerText = "Готов к установке!";
+                }
+            }, 1000);
+        }
+        
 
         // Обработчик кликов на канвас и курсор
         cursor.addEventListener('click', addPixelIntoGame);
