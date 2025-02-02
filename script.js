@@ -25,16 +25,16 @@ const colorList = [
 let currentColorChoice = colorList[9]
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBrpdr3nJyghyxFq45P5cuJIbpOY6sV1zo",
-    authDomain: "pixel-war-b9db6.firebaseapp.com",
-    projectId: "pixel-war-b9db6",
-    storageBucket: "pixel-war-b9db6.firebasestorage.app",
-    messagingSenderId: "235773191644",
-    appId: "1:235773191644:web:53b48f845ae04e0cef9b19"
+  apiKey: "AIzaSyDDKbjm-xCZZvslheZm4wRRHTT9nfKl3o8",
+  authDomain: "final-war2.firebaseapp.com",
+  projectId: "final-war2",
+  storageBucket: "final-war2.firebasestorage.app",
+  messagingSenderId: "419549501377",
+  appId: "1:419549501377:web:85245e0254551df5ea8140"
 };
 
-// Инициализация Firebase
-firebase.initializeApp(firebaseConfig)
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 const db = firebase.firestore()
 
 // Генерация палитры цветов
