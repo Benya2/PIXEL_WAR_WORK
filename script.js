@@ -1,6 +1,7 @@
 const colorsChoice = document.querySelector('#colorsChoice')
 const game = document.querySelector('#game')
 const cursor = document.querySelector('#cursor')
+const authButton = document.querySelector('#authButton')  // Кнопка для аутентификации
 
 game.width = 1200
 game.height = 600
@@ -36,6 +37,34 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = firebase.firestore()
+const auth = firebase.auth()
+
+// Логика аутентификации
+authButton.addEventListener('click', () => {
+    const email = prompt('Enter your email:');
+    const password = prompt('Enter your password:');
+
+    auth.signInWithEmailAndPassword(email, password)
+        .then(userCredential => {
+            const user = userCredential.user;
+            console.log('User signed in:', user);
+            alert('You are now logged in!');
+            authButton.textContent = 'Log Out'; // Меняем текст кнопки на "Выйти"
+        })
+        .catch(error => {
+            console.error(error);
+            alert('Failed to sign in. Please check your credentials.');
+        });
+});
+
+// Логика выхода
+auth.onAuthStateChanged(user => {
+    if (user) {
+        authButton.textContent = 'Log Out'; // Кнопка "Выйти"
+    } else {
+        authButton.textContent = 'Log In'; // Кнопка "Войти"
+    }
+});
 
 colorList.forEach(color => {
     const colorItem = document.createElement('div')
@@ -66,6 +95,12 @@ function deletePixel(x, y) {
 
 // Добавляем пиксель в игру и в Firestore
 function addPixelIntoGame() {
+    const user = auth.currentUser;
+    if (!user) {
+        alert('You must be logged in to place pixels!');
+        return;
+    }
+
     const x = cursor.offsetLeft
     const y = cursor.offsetTop - game.offsetTop
 
