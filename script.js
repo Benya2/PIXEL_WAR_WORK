@@ -61,21 +61,39 @@ function createPixel(x, y, color) {
     ctx.fillRect(x, y, gridCellSize, gridCellSize)
 }
 
+// Функция для удаления пикселя (рисуем белым)
+function deletePixel(x, y) {
+    createPixel(x, y, "#FFFFFF");
+}
+
 // Добавляем пиксель в игру и в Firestore
 function addPixelIntoGame() {
     const x = cursor.offsetLeft
     const y = cursor.offsetTop - game.offsetTop
 
-    createPixel(x, y, currentColorChoice)
+    // Проверяем, существует ли пиксель на этих координатах
+    const pixelRef = db.collection('pixels').doc(`${x}-${y}`)
+    pixelRef.get().then((doc) => {
+        if (doc.exists) {
+            // Если пиксель уже есть, удаляем его
+            deletePixel(x, y)
 
-    const pixel = {
-        x,
-        y,
-        color: currentColorChoice
-    }
+            // Удаляем пиксель из Firestore
+            pixelRef.delete()
+        }
 
-    const pixelRef = db.collection('pixels').doc(`${pixel.x}-${pixel.y}`)
-    pixelRef.set(pixel, { merge: true })
+        // Создаём новый пиксель с выбранным цветом
+        createPixel(x, y, currentColorChoice)
+
+        const pixel = {
+            x,
+            y,
+            color: currentColorChoice
+        }
+
+        // Сохраняем новый пиксель в Firestore
+        pixelRef.set(pixel, { merge: true })
+    })
 }
 
 cursor.addEventListener('click', function (event) {
