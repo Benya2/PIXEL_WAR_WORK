@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>  
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -12,11 +12,14 @@
 <button id="authButton">Log In</button>
 
 <h1>Pixel war</h1> 
-<h4>Site Version 2.0</h4>
+<h4>Site Version 1.8</h4>
 <div id="userCount">Online Players: 0 (not work)</div>
 <div id="cursor"></div>
 <canvas id="game"></canvas>
 <div id="colorsChoice"></div>
+
+<!-- Новый элемент для таймера перезарядки -->
+<div id="reloadTimer"></div>
 
 <!-- Подключаем Firebase один раз -->
 <script type="module">
@@ -33,7 +36,6 @@
         appId: "1:419549501377:web:85245e0254551df5ea8140"
     };
 
-    // Гарантируем, что Firebase инициализируется только один раз
     let app;
     if (!window.firebaseApp) {
         app = initializeApp(firebaseConfig);
@@ -102,6 +104,7 @@
         canPlacePixel = false;
         let timeLeft = reloadTime;
 
+        const reloadTimer = document.getElementById('reloadTimer');
         reloadTimer.innerText = `Перезарядка: ${timeLeft} сек.`;
         const countdown = setInterval(() => {
             timeLeft--;
@@ -188,6 +191,10 @@
         const messageElem = document.createElement('div');
         messageElem.textContent = `${data.username}: ${data.message}`;
         document.getElementById('chatMessages').appendChild(messageElem);
+
+        setTimeout(() => {
+            messageElem.remove(); // Убираем сообщение через 10 секунд
+        }, 10000); // Через 10 секунд
     });
 
 </script>
