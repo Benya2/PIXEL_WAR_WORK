@@ -197,5 +197,65 @@ const app = initializeApp(firebaseConfig);
 
     <script src="script.js"></script>
 
+
+
+
+
+
+
+
+
+    <!-- Добавляем в HTML -->
+<div id="chat">
+    <div id="chatMessages"></div>
+    <input type="text" id="username" placeholder="Ваше имя">
+    <input type="text" id="message" placeholder="Введите сообщение">
+    <button id="sendMessage">Отправить</button>
+</div>
+
+<style>
+    #chat { position: fixed; bottom: 10px; right: 10px; width: 300px; background: white; padding: 10px; border: 1px solid #ccc; }
+    #chatMessages { height: 200px; overflow-y: auto; border-bottom: 1px solid #ccc; margin-bottom: 10px; }
+    input { width: 100%; margin-bottom: 5px; }
+</style>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
+
+    const firebaseConfig = {
+  apiKey: "AIzaSyDWJ25OItyu03e85wZIqFinb_ONlyiYmi0",
+  authDomain: "chat-d1e21.firebaseapp.com",
+  projectId: "chat-d1e21",
+  storageBucket: "chat-d1e21.firebasestorage.app",
+  messagingSenderId: "841945833424",
+  appId: "1:841945833424:web:acae6d3d417eb94db6a3d5"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const chatRef = ref(db, 'chat');
+
+    document.getElementById('sendMessage').addEventListener('click', () => {
+        const username = document.getElementById('username').value.trim();
+        const message = document.getElementById('message').value.trim();
+
+        if (username && message) {
+            push(chatRef, { username, message });
+            document.getElementById('message').value = '';
+        }
+    });
+
+    onChildAdded(chatRef, (snapshot) => {
+        const data = snapshot.val();
+        const messageElem = document.createElement('div');
+        messageElem.textContent = `${data.username}: ${data.message}`;
+        document.getElementById('chatMessages').appendChild(messageElem);
+    });
+</script>
+
 </body>
 </html>
