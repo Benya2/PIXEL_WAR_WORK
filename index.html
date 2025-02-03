@@ -1,4 +1,4 @@
-<!DOCTYPE html>  
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -13,7 +13,7 @@
 
 <h1>Pixel war</h1> 
 <h4>Site Version 1.95</h4>
-<div id="userCount">Online Players: 0 (not work)</div>
+<div id="userCount">Online Players: 0</div>
 <div id="cursor"></div>
 <canvas id="game"></canvas>
 <div id="colorsChoice"></div>
@@ -33,7 +33,8 @@
         projectId: "final-war2",
         storageBucket: "final-war2.firebasestorage.app",
         messagingSenderId: "419549501377",
-        appId: "1:419549501377:web:85245e0254551df5ea8140"
+        appId: "1:419549501377:web:85245e0254551df5ea8140",
+        databaseURL: "https://final-war2-default-rtdb.firebaseio.com/"
     };
 
     let app;
@@ -96,7 +97,9 @@
 
         const pixel = { x, y, color: currentColorChoice };
         const pixelRef = doc(db, "pixels", `${pixel.x}-${pixel.y}`);
-        setDoc(pixelRef, pixel, { merge: true });
+        setDoc(pixelRef, pixel, { merge: true }).catch(error => {
+            console.error("Error setting pixel:", error);
+        });
         startReload();
     }
 
@@ -150,9 +153,11 @@
     function registerUser() {
         const userId = Date.now().toString();
         const userRef = ref(rtdb, 'users/' + userId);
-        set(userRef, { userId, timestamp: Date.now() });
+        set(userRef, { userId, timestamp: Date.now() }).catch(error => {
+            console.error("Error registering user:", error);
+        });
 
-        window.addEventListener('beforeunload', () => { remove(userRef); });
+        window.addEventListener('beforeunload', () => { remove(userRef).catch(error => console.error("Error removing user:", error)); });
     }
 
     function updateUserCount() {
@@ -184,7 +189,9 @@
 
         if (username && message) {
             // Сохранение сообщения в Firebase
-            push(chatRef, { username, message });
+            push(chatRef, { username, message }).catch(error => {
+                console.error("Error sending message:", error);
+            });
             document.getElementById('message').value = '';
         }
     });
@@ -202,7 +209,7 @@
     <div id="chatMessages"></div>
     <input type="text" id="username" placeholder="username">
     <input type="text" id="message" placeholder="message">
-    <button id="sendMessage">Send</button id="sendMessage">
+    <button id="sendMessage">Send</button>
 </div>
 
 </body>
