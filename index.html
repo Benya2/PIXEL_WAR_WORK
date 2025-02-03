@@ -1,3 +1,27 @@
+<!DOCTYPE html>  
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel War</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<button id="authButton">Log In</button>
+
+<h1>Pixel war</h1> 
+<h4>Site Version 1.95</h4>
+<div id="userCount">Online Players: 0 (not work)</div>
+<div id="cursor"></div>
+<canvas id="game"></canvas>
+<div id="colorsChoice"></div>
+
+<!-- Новый элемент для таймера перезарядки -->
+<div id="reloadTimer"></div>
+
+<!-- Подключаем Firebase один раз -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
     import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
@@ -9,8 +33,7 @@
         projectId: "final-war2",
         storageBucket: "final-war2.firebasestorage.app",
         messagingSenderId: "419549501377",
-        appId: "1:419549501377:web:85245e0254551df5ea8140",
-        databaseURL: "https://final-war2-default-rtdb.firebaseio.com/"
+        appId: "1:419549501377:web:85245e0254551df5ea8140"
     };
 
     let app;
@@ -73,9 +96,7 @@
 
         const pixel = { x, y, color: currentColorChoice };
         const pixelRef = doc(db, "pixels", `${pixel.x}-${pixel.y}`);
-        setDoc(pixelRef, pixel, { merge: true }).catch(error => {
-            console.error("Error setting pixel:", error);
-        });
+        setDoc(pixelRef, pixel, { merge: true });
         startReload();
     }
 
@@ -129,11 +150,9 @@
     function registerUser() {
         const userId = Date.now().toString();
         const userRef = ref(rtdb, 'users/' + userId);
-        set(userRef, { userId, timestamp: Date.now() }).catch(error => {
-            console.error("Error registering user:", error);
-        });
+        set(userRef, { userId, timestamp: Date.now() });
 
-        window.addEventListener('beforeunload', () => { remove(userRef).catch(error => console.error("Error removing user:", error)); });
+        window.addEventListener('beforeunload', () => { remove(userRef); });
     }
 
     function updateUserCount() {
@@ -165,9 +184,7 @@
 
         if (username && message) {
             // Сохранение сообщения в Firebase
-            push(chatRef, { username, message }).catch(error => {
-                console.error("Error sending message:", error);
-            });
+            push(chatRef, { username, message });
             document.getElementById('message').value = '';
         }
     });
@@ -180,3 +197,13 @@
     });
 
 </script>
+
+<div id="chat">
+    <div id="chatMessages"></div>
+    <input type="text" id="username" placeholder="username">
+    <input type="text" id="message" placeholder="message">
+    <button id="sendMessage">Send</button id="sendMessage">
+</div>
+
+</body>
+</html>
