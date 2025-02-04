@@ -1,216 +1,65 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel War</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-<button id="authButton">Log In</button>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-<h1>Pixel war</h1> 
-<h4>Site Version 1.95</h4>
-<div id="userCount">Online Players: 0</div>
-<div id="cursor"></div>
-<canvas id="game"></canvas>
-<div id="colorsChoice"></div>
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-<!-- Новый элемент для таймера перезарядки -->
-<div id="reloadTimer"></div>
+const gridSize = 10;
+let scale = 1;
+let offsetX = 0, offsetY = 0;
+let isDragging = false;
+let startX, startY;
 
-<!-- Подключаем Firebase один раз -->
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
-    import { getDatabase, ref, set, onValue, remove, push, onChildAdded } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyDDKbjm-xCZZvslheZm4wRRHTT9nfKl3o8",
-        authDomain: "final-war2.firebaseapp.com",
-        projectId: "final-war2",
-        storageBucket: "final-war2.firebasestorage.app",
-        messagingSenderId: "419549501377",
-        appId: "1:419549501377:web:85245e0254551df5ea8140",
-        databaseURL: "https://final-war2-default-rtdb.firebaseio.com/"
-    };
-
-    let app;
-    if (!window.firebaseApp) {
-        app = initializeApp(firebaseConfig);
-        window.firebaseApp = app;
-    } else {
-        app = window.firebaseApp;
-    }
-
-    const db = getFirestore(app);
-    const rtdb = getDatabase(app);
-
-    console.log("Firebase Firestore и Realtime Database подключены!");
-
-    const colorsChoice = document.querySelector('#colorsChoice');
-    const game = document.querySelector('#game');
-    const cursor = document.querySelector('#cursor');
-    const userCountElement = document.querySelector('#userCount');
+canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const zoomFactor = 1.1;
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
     
-    game.width = 1200;
-    game.height = 600;
-    const gridCellSize = 10;
-    
-    const ctx = game.getContext('2d');
-    const gridCtx = game.getContext('2d');
+    const newScale = event.deltaY < 0 ? scale * zoomFactor : scale / zoomFactor;
+    offsetX = mouseX - ((mouseX - offsetX) * newScale) / scale;
+    offsetY = mouseY - ((mouseY - offsetY) * newScale) / scale;
+    scale = newScale;
 
-    let canPlacePixel = true;
-    const reloadTime = 5;
+    draw();
+});
 
-    const colorList = [
-        "#FFFFFF", "#B39DDB", "#9FA8DA", "#90CAF9", "#81D4FA", "#80DEEA",
-        "#4DB6AC", "#66BB6A", "#9CCC65", "#CDDC39", "#FFEB3B", "#FFC107", "#FF9800", "#FF5722",
-        "#A1887F", "#E0E0E0", "#90A4AE", "#000"
-    ];
-    let currentColorChoice = colorList[9];
+canvas.addEventListener("mousedown", (event) => {
+    isDragging = true;
+    startX = event.clientX - offsetX;
+    startY = event.clientY - offsetY;
+});
 
-    colorList.forEach(color => {
-        const colorItem = document.createElement('div');
-        colorItem.style.backgroundColor = color;
-        colorsChoice.appendChild(colorItem);
-
-        colorItem.addEventListener('click', () => {
-            currentColorChoice = color;
-            colorItem.innerHTML = `<i class="fa-solid fa-check"></i>`;
-            setTimeout(() => { colorItem.innerHTML = ""; }, 1000);
-        });
-    });
-
-    function createPixel(x, y, color) {
-        ctx.beginPath();
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, gridCellSize, gridCellSize);
+canvas.addEventListener("mousemove", (event) => {
+    if (isDragging) {
+        offsetX = event.clientX - startX;
+        offsetY = event.clientY - startY;
+        draw();
     }
+});
 
-    function addPixelIntoGame() {
-        const x = cursor.offsetLeft;
-        const y = cursor.offsetTop - game.offsetTop;
-        createPixel(x, y, currentColorChoice);
+canvas.addEventListener("mouseup", () => {
+    isDragging = false;
+});
 
-        const pixel = { x, y, color: currentColorChoice };
-        const pixelRef = doc(db, "pixels", `${pixel.x}-${pixel.y}`);
-        setDoc(pixelRef, pixel, { merge: true }).catch(error => {
-            console.error("Error setting pixel:", error);
-        });
-        startReload();
+function draw() {
+    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+    ctx.clearRect(-offsetX / scale, -offsetY / scale, canvas.width / scale, canvas.height / scale);
+    drawGrid();
+}
+
+function drawGrid() {
+    ctx.beginPath();
+    ctx.strokeStyle = "#ccc";
+    for (let x = 0; x < canvas.width / scale; x += gridSize) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height / scale);
     }
-
-    function startReload() {
-        canPlacePixel = false;
-        let timeLeft = reloadTime;
-
-        const reloadTimer = document.getElementById('reloadTimer');
-        reloadTimer.innerText = `Перезарядка: ${timeLeft} сек.`;
-        const countdown = setInterval(() => {
-            timeLeft--;
-            reloadTimer.innerText = `Перезарядка: ${timeLeft} сек.`;
-
-            if (timeLeft <= 0) {
-                clearInterval(countdown);
-                canPlacePixel = true;
-                reloadTimer.innerText = "Готов к установке!";
-            }
-        }, 1000);
+    for (let y = 0; y < canvas.height / scale; y += gridSize) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width / scale, y);
     }
+    ctx.stroke();
+}
 
-    cursor.addEventListener('click', addPixelIntoGame);
-    game.addEventListener('click', addPixelIntoGame);
-
-    function drawGrids(ctx, width, height, cellWidth, cellHeight) {
-        ctx.beginPath();
-        ctx.strokeStyle = "#ccc";
-
-        for (let i = 0; i < width / cellWidth; i++) {
-            ctx.moveTo(i * cellWidth, 0);
-            ctx.lineTo(i * cellWidth, height);
-        }
-
-        for (let i = 0; i < height / cellHeight; i++) {
-            ctx.moveTo(0, i * cellHeight);
-            ctx.lineTo(width, i * cellHeight);
-        }
-        ctx.stroke();
-    }
-
-    drawGrids(gridCtx, game.width, game.height, gridCellSize, gridCellSize);
-
-    game.addEventListener('mousemove', function(event) {
-        const cursorLeft = event.clientX - (cursor.offsetWidth / 2);
-        const cursorTop = event.clientY - (cursor.offsetHeight / 2);
-
-        cursor.style.left = Math.floor(cursorLeft / gridCellSize) * gridCellSize + "px";
-        cursor.style.top = Math.floor(cursorTop / gridCellSize) * gridCellSize + "px";
-    });
-
-    function registerUser() {
-        const userId = Date.now().toString();
-        const userRef = ref(rtdb, 'users/' + userId);
-        set(userRef, { userId, timestamp: Date.now() }).catch(error => {
-            console.error("Error registering user:", error);
-        });
-
-        window.addEventListener('beforeunload', () => { remove(userRef).catch(error => console.error("Error removing user:", error)); });
-    }
-
-    function updateUserCount() {
-        const usersRef = ref(rtdb, 'users');
-        onValue(usersRef, (snapshot) => {
-            const users = snapshot.val();
-            const userCount = users ? Object.keys(users).length : 0;
-            userCountElement.innerText = `Пользователей онлайн: ${userCount}`;
-        });
-    }
-
-    registerUser();
-    updateUserCount();
-
-    // Реакция на изменения пикселей в базе данных Firestore
-    onSnapshot(collection(db, "pixels"), (querySnapshot) => {
-        querySnapshot.docChanges().forEach((change) => {
-            const { x, y, color } = change.doc.data();
-            createPixel(x, y, color);
-        });
-    });
-
-    // Реакция на сообщения в чате
-    const chatRef = ref(rtdb, 'chat');
-
-    document.getElementById('sendMessage').addEventListener('click', () => {
-        const username = document.getElementById('username').value.trim();
-        const message = document.getElementById('message').value.trim();
-
-        if (username && message) {
-            // Сохранение сообщения в Firebase
-            push(chatRef, { username, message }).catch(error => {
-                console.error("Error sending message:", error);
-            });
-            document.getElementById('message').value = '';
-        }
-    });
-
-    onChildAdded(chatRef, (snapshot) => {
-        const data = snapshot.val();
-        const messageElem = document.createElement('div');
-        messageElem.textContent = `${data.username}: ${data.message}`;
-        document.getElementById('chatMessages').appendChild(messageElem);
-    });
-
-</script>
-
-<div id="chat">
-    <div id="chatMessages"></div>
-    <input type="text" id="username" placeholder="username">
-    <input type="text" id="message" placeholder="message">
-    <button id="sendMessage">Send</button>
-</div>
-
-</body>
-</html>
+draw();
