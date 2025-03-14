@@ -9,14 +9,14 @@ h1 {
   background-color: white;
   border-bottom: 2px solid black;
   padding: 10px;
-  transition: color 0.3s ease, background-color 0.3s ease; /* Точная анимация */
+  transition: color 0.3s ease, background-color 0.3s ease; /* Уточнена анимация */
   color: #ff5a5f;
   font-family: "VT323", monospace;
   font-size: 4em;
 }
 
 h1:hover {
-  color: #ff00ff; /* Цвет текста при наведении */
+  color: #ff00ff; /* Изменение цвета текста при наведении */
   background-color: #f0f0f0; /* Изменение фона при наведении */
 }
 
