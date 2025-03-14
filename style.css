@@ -1,26 +1,23 @@
-
 body {
   margin: 0;
 }
 
 h1 {
   display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background-color: white; /* Или другой цвет */
-    border-bottom: 2px solid black;
-    height: auto; /* Убирает лишнюю высоту */
-    padding: 10px; /* Отступы внутри */
-  
-  border: 2px solid black;
-  transition: all 0.3s ease;
+  align-items: center;
+  justify-content: space-between;
+  background-color: white;
+  border-bottom: 2px solid black;
+  padding: 10px;
+  transition: color 0.3s ease, background-color 0.3s ease; /* Точная анимация */
   color: #ff5a5f;
   font-family: "VT323", monospace;
   font-size: 4em;
 }
 
-h1:hover{
-  
+h1:hover {
+  color: #ff00ff; /* Цвет текста при наведении */
+  background-color: #f0f0f0; /* Изменение фона при наведении */
 }
 
 #game {
@@ -35,6 +32,7 @@ h1:hover{
   right: 50px;
   top: 140px;
 }
+
 #colorsChoice div {
   background-color: #ff5a5f;
   height: 20px;
@@ -42,23 +40,24 @@ h1:hover{
   border-radius: 50%;
   margin-bottom: 10px;
   border: 1px solid transparent;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
   color: #ffffff;
 }
+
 #colorsChoice div:hover {
   border-color: #000000;
 }
 
 #cursor {
   position: absolute;
-  box-sizing: border-box;
-  width: 10px;
-  height: 10px;
+  width: 15px; /* Увеличен размер курсора */
+  height: 15px;
   background-color: transparent;
-  border: 1px solid #000000;
-  cursor: none;
-}/*# sourceMappingURL=style.css.map */
+  border: 2px solid #000000;
+  border-radius: 50%;
+  pointer-events: none; /* Курсор не мешает кликам */
+}
