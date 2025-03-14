@@ -4,6 +4,7 @@ body {
 }
 
 h1 {
+  height: auto;
   border: 2px solid black;
   transition: all 0.3s ease;
   color: #ff5a5f;
