@@ -4,8 +4,14 @@ body {
 }
 
 h1 {
-  padding: 10px;
-  height: auto;
+  display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: white; /* Или другой цвет */
+    border-bottom: 2px solid black;
+    height: auto; /* Убирает лишнюю высоту */
+    padding: 10px; /* Отступы внутри */
+  
   border: 2px solid black;
   transition: all 0.3s ease;
   color: #ff5a5f;
