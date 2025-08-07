@@ -26,13 +26,13 @@ const colorList = [
 let currentColorChoice = colorList[9];
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAtpMIFFcilesRPHEwlIYXyQhBfGPyKrC0",
-  authDomain: "yosiki-bb1ae.firebaseapp.com",
-  projectId: "yosiki-bb1ae",
-  storageBucket: "yosiki-bb1ae.firebasestorage.app",
-  messagingSenderId: "701005418429",
-  appId: "1:701005418429:web:7593d4f61f332f9ce88cd4",
-  measurementId: "G-2V4S6LZ3EN"
+  apiKey: "AIzaSyCwy4jVn9JIwXuIXVycYAv9EdPGPkgIJvA",
+  authDomain: "pixellox.firebaseapp.com",
+  projectId: "pixellox",
+  storageBucket: "pixellox.firebasestorage.app",
+  messagingSenderId: "461991610382",
+  appId: "1:461991610382:web:2a5ae293dde4a754c2d45f",
+  measurementId: "G-YC8KLBZC2V"
 };
 
 // Initialize Firebase
