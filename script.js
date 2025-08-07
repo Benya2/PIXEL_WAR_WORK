@@ -26,12 +26,13 @@ const colorList = [
 let currentColorChoice = colorList[9];
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDDKbjm-xCZZvslheZm4wRRHTT9nfKl3o8",
-  authDomain: "final-war2.firebaseapp.com",
-  projectId: "final-war2",
-  storageBucket: "final-war2.firebasestorage.app",
-  messagingSenderId: "419549501377",
-  appId: "1:419549501377:web:85245e0254551df5ea8140"
+  apiKey: "AIzaSyAtpMIFFcilesRPHEwlIYXyQhBfGPyKrC0",
+  authDomain: "yosiki-bb1ae.firebaseapp.com",
+  projectId: "yosiki-bb1ae",
+  storageBucket: "yosiki-bb1ae.firebasestorage.app",
+  messagingSenderId: "701005418429",
+  appId: "1:701005418429:web:7593d4f61f332f9ce88cd4",
+  measurementId: "G-2V4S6LZ3EN"
 };
 
 // Initialize Firebase
@@ -84,14 +85,25 @@ colorList.forEach(color => {
 
 function createPixel(x, y, color) {
     ctx.beginPath();
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, gridCellSize, gridCellSize);
+
+    if (color.toUpperCase() === "#FFFFFF") {
+        // Ещё меньший отступ — теперь 3 пикселя со всех сторон
+        const inset = 3;
+        ctx.fillStyle = color;
+        ctx.fillRect(
+            x + inset,
+            y + inset,
+            gridCellSize - inset * 2,
+            gridCellSize - inset * 2
+        );
+    } else {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, gridCellSize, gridCellSize);
+    }
 }
 
-// Функция для удаления пикселя (рисуем белым)
-function deletePixel(x, y) {
-    createPixel(x, y, "#FFFFFF");
-}
+
+
 
 // Добавляем пиксель в игру и в Firestore
 function addPixelIntoGame() {
@@ -103,38 +115,66 @@ function addPixelIntoGame() {
 
     const x = cursor.offsetLeft;
     const y = cursor.offsetTop - game.offsetTop;
+    const pixelKey = `${x}-${y}`;
+    const pixelRef = db.collection('pixels').doc(pixelKey);
 
-    // Проверяем, существует ли пиксель на этих координатах
-    const pixelRef = db.collection('pixels').doc(`${x}-${y}`);
-    pixelRef.get().then((doc) => {
-        if (doc.exists) {
-            // Если пиксель уже есть, удаляем его
-            deletePixel(x, y);
+    const isWhite = currentColorChoice.toUpperCase() === "#FFFFFF";
 
-            // Удаляем пиксель из Firestore
-            pixelRef.delete();
+    if (isWhite) {
+        // Удаляем текущий белый пиксель
+        pixelRef.delete()
+            .then(() => {
+                console.log(`✅ Удалён белый пиксель: ${pixelKey}`);
+                deletePixel(x, y);
+            })
+            .catch(err => {
+                console.error("❌ Ошибка при удалении белого пикселя:", err);
+            });
+
+        // Удаляем пиксель под ним
+        const belowY = y + gridCellSize;
+        const belowKey = `${x}-${belowY}`;
+        const belowRef = db.collection('pixels').doc(belowKey);
+
+        belowRef.get().then(doc => {
+            if (doc.exists) {
+                belowRef.delete().then(() => {
+                    console.log(`✅ Удалён пиксель под белым: ${belowKey}`);
+                    deletePixel(x, belowY);
+                }).catch(err => {
+                    console.error("❌ Ошибка при удалении нижнего пикселя:", err);
+                });
+            }
+        });
+
+        // НИЧЕГО НЕ СОХРАНЯЕМ! — просто return
+        return;
+    }
+
+    // 🟩 Обычная логика, если цвет НЕ белый
+    pixelRef.get().then(docSnapshot => {
+        if (docSnapshot.exists) {
+            pixelRef.delete().then(() => {
+                console.log(`🔁 Старый пиксель удалён: ${pixelKey}`);
+            }).catch(err => {
+                console.error("❌ Ошибка при удалении:", err);
+            });
         }
 
-        // Создаём новый пиксель с выбранным цветом
-        createPixel(x, y, currentColorChoice);
-
-        const pixel = {
-            x,
-            y,
-            color: currentColorChoice
-        };
-
-        // Сохраняем новый пиксель в Firestore
-        pixelRef.set(pixel, { merge: true });
+        const newPixel = { x, y, color: currentColorChoice };
+        pixelRef.set(newPixel, { merge: true })
+            .then(() => {
+                console.log(`✅ Установлен новый пиксель: ${pixelKey}`);
+                createPixel(x, y, currentColorChoice);
+            })
+            .catch(err => {
+                console.error("❌ Ошибка при установке пикселя:", err);
+            });
+    }).catch(error => {
+        console.error("❌ Ошибка при получении пикселя:", error);
     });
 }
 
-cursor.addEventListener('click', function (event) {
-    addPixelIntoGame();
-});
-game.addEventListener('click', function () {
-    addPixelIntoGame();
-});
 
 // Функция рисования сетки
 function drawGrids(ctx, width, height, cellWidth, cellHeight) {
