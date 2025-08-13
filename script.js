@@ -111,28 +111,3 @@ document.getElementById("clearAllBtn").addEventListener("click", async () => {
     });
   }
 });
-
-
-game.addEventListener("mousemove", e => {
-  // Привязка к сетке
-  const gridX = Math.floor(e.offsetX / gridCellSize) * gridCellSize;
-  const gridY = Math.floor(e.offsetY / gridCellSize) * gridCellSize;
-
-  // Курсор по клеткам
-  cursor.style.left = `${gridX}px`;
-  cursor.style.top = `${gridY}px`;
-
-  if (isDrawing) {
-    placePixel(gridX, gridY);
-  }
-});
-
-async function placePixel(gridX, gridY) {
-  await setDoc(doc(db, "pixels", `${gridX}_${gridY}`), {
-    x: gridX,
-    y: gridY,
-    color: currentColor
-  });
-}
-
-
