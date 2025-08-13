@@ -16,11 +16,12 @@ h1 {
 }
 #cursor {
   position: absolute;
-  width: 10px;  /* размер клетки */
-  height: 10px;
-  pointer-events: none;
   box-sizing: border-box;
-  border: 1px solid #000;
+  width: 10px;
+  height: 10px;
+  background-color: transparent;
+  border: 1px solid #000000;
+  cursor: none;
 }
 #colorsChoice {
   position: fixed;
@@ -56,5 +57,6 @@ h1 {
   padding: 10px;
   border-radius: 8px;
 }
+
 
 
