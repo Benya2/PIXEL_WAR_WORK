@@ -2,21 +2,84 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pixel Admin</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <h1>Pixel Planet — Admin</h1>
 
-    <div id="authPanel">
+    <div id="auth-section">
         <input type="email" id="email" placeholder="Email">
         <input type="password" id="password" placeholder="Пароль">
-        <button id="registerBtn">Регистрация</button>
-        <button id="loginBtn">Вход</button>
-        <button id="logoutBtn" style="display:none;">Выход</button>
+        <button id="loginBtn">Войти</button>
+        <button id="registerBtn">Зарегистрироваться</button>
+        <button id="logoutBtn" style="display:none;">Выйти</button>
     </div>
 
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="game" width="800" height="600"></canvas>
+
+    <div id="admin-panel" style="display:none;">
+        <h2>Админ панель</h2>
+        <div>
+            <input type="text" id="banEmail" placeholder="Email игрока для бана">
+            <button id="banBtn">Бан</button>
+        </div>
+        <div>
+            <input type="number" id="clearX" placeholder="X">
+            <input type="number" id="clearY" placeholder="Y">
+            <input type="number" id="clearSize" placeholder="Размер">
+            <button id="clearBtn">Очистить зону</button>
+        </div>
+        <div>
+            <input type="number" id="pixelX" placeholder="X">
+            <input type="number" id="pixelY" placeholder="Y">
+            <input type="color" id="pixelColor">
+            <button id="placePixelBtn">Поставить пиксель</button>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Pixel Admin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Pixel Planet — Admin</h1>
+
+    <div id="auth-section">
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Пароль">
+        <button id="loginBtn">Войти</button>
+        <button id="registerBtn">Зарегистрироваться</button>
+        <button id="logoutBtn" style="display:none;">Выйти</button>
+    </div>
+
+    <canvas id="game" width="800" height="600"></canvas>
+
+    <div id="admin-panel" style="display:none;">
+        <h2>Админ панель</h2>
+        <div>
+            <input type="text" id="banEmail" placeholder="Email игрока для бана">
+            <button id="banBtn">Бан</button>
+        </div>
+        <div>
+            <input type="number" id="clearX" placeholder="X">
+            <input type="number" id="clearY" placeholder="Y">
+            <input type="number" id="clearSize" placeholder="Размер">
+            <button id="clearBtn">Очистить зону</button>
+        </div>
+        <div>
+            <input type="number" id="pixelX" placeholder="X">
+            <input type="number" id="pixelY" placeholder="Y">
+            <input type="color" id="pixelColor">
+            <button id="placePixelBtn">Поставить пиксель</button>
+        </div>
+    </div>
 
     <script type="module" src="script.js"></script>
 </body>
