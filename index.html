@@ -2,26 +2,26 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pixel Game</title>
     <link rel="stylesheet" href="style.css">
+    <script type="module" src="script.js" defer></script>
 </head>
 <body>
     <h1>Pixel Game</h1>
-    <canvas id="game"></canvas>
-    <div id="colorsChoice"></div>
-    <div id="cursor"></div>
     <button id="authButton">Войти / Зарегистрироваться</button>
 
-    <!-- Админка -->
-    <div id="adminPanel" style="display: none;">
-        <h3>Админ панель</h3>
-        <input type="text" id="banEmail" placeholder="Email для бана">
-        <button id="banBtn">Бан</button>
-        <button id="clearAreaBtn">Очистить область</button>
-        <button id="clearMapBtn">Очистить всю карту</button>
-    </div>
+    <canvas id="game"></canvas>
 
-    <script type="module" src="script.js"></script>
+    <div id="colorsChoice"></div>
+    <div id="cursor"></div>
+
+    <!-- Панель администратора -->
+    <div id="adminPanel" style="display: none;">
+        <h2>Админка</h2>
+        <input type="text" id="banEmail" placeholder="Email для бана">
+        <button id="banUser">Бан игрока</button>
+        <button id="clearArea">Очистить область</button>
+        <button id="clearMap">Очистить всю карту</button>
+    </div>
 </body>
 </html>
