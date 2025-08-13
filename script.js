@@ -74,13 +74,12 @@ onSnapshot(collection(db,"pixels"), snapshot=>{
 });
 
 // Курсор по клеткам
-game.addEventListener('mousemove', e => {
+game.addEventListener('mousemove', e=>{
   const rect = game.getBoundingClientRect();
-  // верхний левый угол клетки
-  const x = Math.floor((e.clientX - rect.left) / gridCellSize) * gridCellSize;
-  const y = Math.floor((e.clientY - rect.top) / gridCellSize) * gridCellSize;
-  cursor.style.left = (rect.left + x - rect.left) + "px";
-  cursor.style.top = (rect.top + y - rect.top) + "px";
+  const x = Math.floor((e.clientX - rect.left)/gridCellSize)*gridCellSize;
+  const y = Math.floor((e.clientY - rect.top)/gridCellSize)*gridCellSize;
+  cursor.style.left = x + "px";
+  cursor.style.top = y + "px";
 });
 
 // Рисование пикселя (только для авторизованных)
@@ -90,7 +89,7 @@ async function placePixel() {
   canPlace = false;
   const x = parseInt(cursor.style.left);
   const y = parseInt(cursor.style.top);
-  const pixelRef = doc(db,"pixels",${x}-${y});
+  const pixelRef = doc(db,"pixels",`${x}-${y}`);
   try{
     if(currentColor==="#FFFFFF") await deleteDoc(pixelRef);
     else await setDoc(pixelRef,{x,y,color:currentColor});
@@ -101,14 +100,14 @@ async function placePixel() {
 // Кулдаун
 function startReload(){
   let t = reloadTime;
-  reloadTimerEl.innerText = Перезарядка: ${t} сек;
+  reloadTimerEl.innerText = `Перезарядка: ${t} сек`;
   const interval = setInterval(()=>{
     t--;
     if(t<=0){
       clearInterval(interval);
       canPlace = true;
       reloadTimerEl.innerText = "Готово!";
-    } else reloadTimerEl.innerText = Перезарядка: ${t} сек;
+    } else reloadTimerEl.innerText = `Перезарядка: ${t} сек`;
   },1000);
 }
 
