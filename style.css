@@ -1,23 +1,84 @@
 body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    background: #222;
-    color: white;
+  margin: 0;
 }
 
-input, button {
-    margin: 5px;
-    padding: 5px;
+h1 {
+  transition: all 0.3s ease;
+  color: #ff5a5f;
+  font-family: "VT323", monospace;
+  font-size: 4em;
+}
+h1:hover {
+  font-size: 70px;
 }
 
-canvas {
-    border: 1px solid white;
-    margin: 10px 0;
+#game {
+  width: 1200px;
+  height: 600px;
+  box-shadow: 1px 1px 10px -5px rgba(0, 0, 0, 0.5);
+  cursor: none;
 }
 
-#admin-panel {
-    background: #333;
-    padding: 10px;
-    margin-top: 20px;
-    border-radius: 10px;
+#colorsChoice {
+  position: fixed;
+  right: 50px;
+  top: 140px;
+}
+#colorsChoice div {
+  background-color: #ff5a5f;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+  border: 1px solid transparent;
+  transition: all 0.3s;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #ffffff;
+}
+#colorsChoice div:hover {
+  border-color: #000000;
+}
+
+#cursor {
+  position: absolute;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  background-color: transparent;
+  border: 1px solid #000000;
+  cursor: none;
+}
+
+/* Админ-панель */
+#adminPanel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #222;
+  color: white;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+#adminPanel h2 {
+  margin: 0;
+  font-size: 1.2em;
+}
+#adminPanel input {
+  padding: 5px;
+}
+#adminPanel button {
+  padding: 5px 10px;
+  background: #ff5a5f;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+#adminPanel button:hover {
+  background: #ff1f2a;
 }
