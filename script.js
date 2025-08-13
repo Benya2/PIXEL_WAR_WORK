@@ -1,10 +1,6 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { 
-    getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs 
-} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { 
-    getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCwy4jVn9JIwXuIXVycYAv9EdPGPkgIJvA",
@@ -12,107 +8,152 @@ const firebaseConfig = {
   projectId: "pixellox",
   storageBucket: "pixellox.firebasestorage.app",
   messagingSenderId: "461991610382",
-  appId: "1:461991610382:web:2a5ae293dde4a754c2d45f",
-  measurementId: "G-YC8KLBZC2V"
+  appId: "1:461991610382:web:2a5ae293dde4a754c2d45f"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const game = document.querySelector('#game');
+const colorsChoiceEl = document.getElementById('colorsChoice');
+const game = document.getElementById('game');
 const ctx = game.getContext('2d');
-const colorsChoice = document.querySelector('#colorsChoice');
-const cursor = document.querySelector('#cursor');
-const authButton = document.querySelector('#authButton');
-const adminPanel = document.querySelector('#adminPanel');
-
-const banBtn = document.getElementById("banUser");
-const clearAreaBtn = document.getElementById("clearArea");
-const clearMapBtn = document.getElementById("clearMap");
-
-let currentUser = null;
-let selectedColor = "#000000";
+const cursor = document.getElementById('cursor');
+const reloadTimerEl = document.getElementById('reloadTimer');
+const adminPanel = document.getElementById('adminPanel');
+const clearAllPixelsBtn = document.getElementById('clearAllPixels');
+const authButton = document.getElementById('authButton');
 
 game.width = 1200;
 game.height = 600;
-
 const gridCellSize = 10;
 
-const colors = ["#000000", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff", "#ffffff"];
-colors.forEach(color => {
-    const div = document.createElement("div");
-    div.style.backgroundColor = color;
-    div.addEventListener("click", () => selectedColor = color);
-    colorsChoice.appendChild(div);
+let currentColor = "#000000";
+let canPlace = true;
+const reloadTime = 5;
+
+// Цвета
+const colors = ["#FFFFFF","#B39DDB","#9FA8DA","#90CAF9","#81D4FA","#80DEEA","#4DB6AC","#66BB6A","#9CCC65","#CDDC39","#FFEB3B","#FFC107","#FF9800","#FF5722","#A1887F","#E0E0E0","#000000"];
+colors.forEach(c => {
+  const div = document.createElement('div');
+  div.style.backgroundColor = c;
+  div.addEventListener('click', ()=> {
+    currentColor = c;
+    document.querySelectorAll('#colorsChoice div').forEach(el=>el.classList.remove('selected'));
+    div.classList.add('selected');
+  });
+  colorsChoiceEl.appendChild(div);
 });
 
+// Рисуем сетку
 function drawGrid() {
-    ctx.strokeStyle = "#ccc";
-    for (let x = 0; x < game.width; x += gridCellSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, game.height);
-        ctx.stroke();
-    }
-    for (let y = 0; y < game.height; y += gridCellSize) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(game.width, y);
-        ctx.stroke();
-    }
+  ctx.clearRect(0,0,game.width, game.height);
+  ctx.beginPath();
+  ctx.strokeStyle = "#ccc";
+  for(let i=0;i<=game.width;i+=gridCellSize){
+    ctx.moveTo(i,0);
+    ctx.lineTo(i,game.height);
+  }
+  for(let j=0;j<=game.height;j+=gridCellSize){
+    ctx.moveTo(0,j);
+    ctx.lineTo(game.width,j);
+  }
+  ctx.stroke();
 }
 drawGrid();
 
-game.addEventListener("mousemove", e => {
-    cursor.style.left = e.pageX + "px";
-    cursor.style.top = e.pageY + "px";
+// Курсор по клеткам
+game.addEventListener('mousemove', e=>{
+  const rect = game.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left)/gridCellSize)*gridCellSize;
+  const y = Math.floor((e.clientY - rect.top)/gridCellSize)*gridCellSize;
+  cursor.style.left = x + "px";
+  cursor.style.top = y + "px";
 });
 
-game.addEventListener("click", async e => {
-    if (!currentUser) return alert("Войдите, чтобы рисовать!");
-    const rect = game.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / gridCellSize);
-    const y = Math.floor((e.clientY - rect.top) / gridCellSize);
-
-    await setDoc(doc(db, "pixels", `${x}_${y}`), { color: selectedColor });
-    ctx.fillStyle = selectedColor;
-    ctx.fillRect(x * gridCellSize, y * gridCellSize, gridCellSize, gridCellSize);
-});
-
-authButton.addEventListener("click", async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-});
-
-onAuthStateChanged(auth, user => {
-    currentUser = user;
-    if (user?.email === "logo100153@gmail.com") {
-        adminPanel.style.display = "block";
+// Рисуем пиксель
+async function placePixel() {
+  if(!canPlace) return;
+  canPlace = false;
+  const x = parseInt(cursor.style.left);
+  const y = parseInt(cursor.style.top);
+  const pixelRef = doc(db, "pixels", `${x}-${y}`);
+  try {
+    if(currentColor === "#FFFFFF"){
+      await deleteDoc(pixelRef);
+      drawGrid();
     } else {
-        adminPanel.style.display = "none";
+      await setDoc(pixelRef, {x,y,color:currentColor});
+      ctx.fillStyle = currentColor;
+      ctx.fillRect(x,y,gridCellSize,gridCellSize);
     }
+  } catch(err){
+    console.error(err);
+  }
+  startReload();
+}
+
+// Кулдаун
+function startReload(){
+  let t = reloadTime;
+  reloadTimerEl.innerText = `Перезарядка: ${t} сек`;
+  const interval = setInterval(()=>{
+    t--;
+    if(t<=0){
+      clearInterval(interval);
+      canPlace = true;
+      reloadTimerEl.innerText = "Готово!";
+    } else reloadTimerEl.innerText = `Перезарядка: ${t} сек`;
+  },1000);
+}
+
+game.addEventListener('click', placePixel);
+cursor.addEventListener('click', placePixel);
+
+// Подписка на пиксели
+onSnapshot(collection(db,"pixels"), snapshot=>{
+  drawGrid();
+  snapshot.forEach(doc=>{
+    const d = doc.data();
+    if(d.color !== "#FFFFFF"){
+      ctx.fillStyle = d.color;
+      ctx.fillRect(d.x,d.y,gridCellSize,gridCellSize);
+    }
+  });
 });
 
-banBtn.addEventListener("click", async () => {
-    if (currentUser?.email !== "logo100153@gmail.com") return;
-    const email = document.getElementById("banEmail").value;
-    await setDoc(doc(db, "banned", email), { banned: true });
-    alert(`Игрок ${email} забанен`);
+// Авторизация и админка
+authButton.addEventListener('click', async ()=>{
+  if(auth.currentUser){
+    await signOut(auth);
+    return;
+  }
+  const email = prompt("Email:");
+  const pass = prompt("Password:");
+  if(!email || !pass) return;
+  try{
+    await signInWithEmailAndPassword(auth,email,pass);
+    alert("Вошли!");
+  }catch(e){
+    if(e.code==="auth/user-not-found"){
+      await createUserWithEmailAndPassword(auth,email,pass);
+      alert("Аккаунт создан!");
+    } else alert(e.message);
+  }
 });
 
-clearAreaBtn.addEventListener("click", async () => {
-    if (currentUser?.email !== "logo100153@gmail.com") return;
-    const pixels = await getDocs(collection(db, "pixels"));
-    pixels.forEach(async (p) => await deleteDoc(p.ref));
-    ctx.clearRect(0, 0, game.width, game.height);
-    drawGrid();
+onAuthStateChanged(auth,user=>{
+  if(user){
+    authButton.textContent="Log Out";
+    adminPanel.style.display="block";
+  } else {
+    authButton.textContent="Log In";
+    adminPanel.style.display="none";
+  }
 });
 
-clearMapBtn.addEventListener("click", async () => {
-    if (currentUser?.email !== "logo100153@gmail.com") return;
-    const pixels = await getDocs(collection(db, "pixels"));
-    pixels.forEach(async (p) => await deleteDoc(p.ref));
-    ctx.clearRect(0, 0, game.width, game.height);
-    drawGrid();
+// Очистка карты
+clearAllPixelsBtn.addEventListener('click', async ()=>{
+  const snapshot = await collection(db,"pixels").get();
+  snapshot.forEach(doc=>deleteDoc(doc.ref));
 });
