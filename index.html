@@ -1,27 +1,27 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Pixel Game</title>
-    <link rel="stylesheet" href="style.css">
-    <script type="module" src="script.js" defer></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel War</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Pixel Game</h1>
-    <button id="authButton">Войти / Зарегистрироваться</button>
 
-    <canvas id="game"></canvas>
+<button id="authButton">Log In</button>
+<h1>Pixel War</h1>
+<div id="userCount">Online Players: 0</div>
 
-    <div id="colorsChoice"></div>
-    <div id="cursor"></div>
+<div id="colorsChoice"></div>
+<canvas id="game"></canvas>
+<div id="cursor"></div>
+<div id="reloadTimer"></div>
 
-    <!-- Панель администратора -->
-    <div id="adminPanel" style="display: none;">
-        <h2>Админка</h2>
-        <input type="text" id="banEmail" placeholder="Email для бана">
-        <button id="banUser">Бан игрока</button>
-        <button id="clearArea">Очистить область</button>
-        <button id="clearMap">Очистить всю карту</button>
-    </div>
+<div id="adminPanel" style="display:none;">
+    <h3>Админка</h3>
+    <button id="clearAllPixels">Очистить всю карту</button>
+</div>
+
+<script type="module" src="app.js"></script>
 </body>
 </html>
