@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel War Admin</title>
+    <title>Pixel Admin</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="authContainer">
+
+    <div id="authPanel">
         <input type="email" id="email" placeholder="Email">
         <input type="password" id="password" placeholder="Пароль">
         <button id="registerBtn">Регистрация</button>
-        <button id="loginBtn">Войти</button>
-        <button id="logoutBtn" style="display:none">Выйти</button>
+        <button id="loginBtn">Вход</button>
+        <button id="logoutBtn" style="display:none;">Выход</button>
     </div>
 
-    <canvas id="game"></canvas>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <script type="module" src="script.js"></script>
 </body>
