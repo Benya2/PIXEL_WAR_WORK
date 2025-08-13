@@ -1,64 +1,57 @@
 body {
   margin: 0;
+  font-family: Arial, sans-serif;
 }
-
 h1 {
-  transition: all 0.3s ease;
   color: #ff5a5f;
-  font-family: "VT323", monospace;
-  font-size: 4em;
+  text-align: center;
 }
-
-h1:hover{
-  font-size: 70px;
-}
-
 #game {
+  display: block;
+  margin: 20px auto;
   width: 1200px;
   height: 600px;
-  box-shadow: 1px 1px 10px -5px rgba(0, 0, 0, 0.5);
+  box-shadow: 1px 1px 10px -5px rgba(0,0,0,0.5);
   cursor: none;
 }
-
+#cursor {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #000;
+  pointer-events: none;
+}
 #colorsChoice {
   position: fixed;
   right: 50px;
-  top: 140px;
+  top: 100px;
+  display: flex;
+  flex-direction: column;
 }
 #colorsChoice div {
-  height: 20px;
   width: 20px;
+  height: 20px;
   border-radius: 50%;
-  margin-bottom: 10px;
-  border: 1px solid transparent;
-  transition: all 0.3s;
+  margin-bottom: 8px;
   cursor: pointer;
+  border: 1px solid transparent;
 }
-#colorsChoice div:hover {
-  border-color: #000000;
+#colorsChoice div.selected {
+  border: 2px solid black;
 }
-
-#cursor {
-  position: absolute;
-  box-sizing: border-box;
-  width: 10px;
-  height: 10px;
-  background-color: transparent;
-  border: 1px solid #000000;
-  cursor: none;
+#reloadTimer {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: bold;
 }
-
-/* Админка */
 #adminPanel {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background: #222;
-  color: white;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #eee;
   padding: 10px;
-}
-#adminPanel input, #adminPanel button {
-  margin: 5px;
-  padding: 5px;
+  border-radius: 8px;
 }
