@@ -18,7 +18,6 @@ h1 {
   position: absolute;
   width: 10px;  /* размер клетки */
   height: 10px;
-  background-color: rgba(0,0,0,0.3); /* полупрозрачный, чтобы видеть сетку */
   pointer-events: none;
   box-sizing: border-box;
   border: 1px solid #000;
@@ -57,4 +56,5 @@ h1 {
   padding: 10px;
   border-radius: 8px;
 }
+
 
