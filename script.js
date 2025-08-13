@@ -74,12 +74,13 @@ onSnapshot(collection(db,"pixels"), snapshot=>{
 });
 
 // Курсор по клеткам
-game.addEventListener('mousemove', e=>{
+game.addEventListener('mousemove', e => {
   const rect = game.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left)/gridCellSize)*gridCellSize;
-  const y = Math.floor((e.clientY - rect.top)/gridCellSize)*gridCellSize;
-  cursor.style.left = x + "px";
-  cursor.style.top = y + "px";
+  // верхний левый угол клетки
+  const x = Math.floor((e.clientX - rect.left) / gridCellSize) * gridCellSize;
+  const y = Math.floor((e.clientY - rect.top) / gridCellSize) * gridCellSize;
+  cursor.style.left = (rect.left + x - rect.left) + "px";
+  cursor.style.top = (rect.top + y - rect.top) + "px";
 });
 
 // Рисование пикселя (только для авторизованных)
@@ -147,3 +148,4 @@ clearAllPixelsBtn.addEventListener('click', async ()=>{
   const snapshot = await getDocs(collection(db,"pixels"));
   snapshot.forEach(doc=>deleteDoc(doc.ref));
 });
+
