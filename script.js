@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
+// 🔑 Твои ключи Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCwy4jVn9JIwXuIXVycYAv9EdPGPkgIJvA",
   authDomain: "pixellox.firebaseapp.com",
@@ -20,20 +21,24 @@ const registerBtn = document.getElementById('registerBtn');
 const loginBtn = document.getElementById('loginBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 
+// Регистрация
 registerBtn.addEventListener('click', () => {
     createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
-        .catch(console.error);
+        .catch(err => alert(err.message));
 });
 
+// Вход
 loginBtn.addEventListener('click', () => {
     signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
-        .catch(console.error);
+        .catch(err => alert(err.message));
 });
 
+// Выход
 logoutBtn.addEventListener('click', () => {
     signOut(auth);
 });
 
+// Проверка состояния
 onAuthStateChanged(auth, user => {
     if (user) {
         logoutBtn.style.display = 'inline-block';
@@ -45,3 +50,10 @@ onAuthStateChanged(auth, user => {
         registerBtn.style.display = 'inline-block';
     }
 });
+
+// 🎨 Тут можно будет добавить код рисования для PixelPlanet
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+ctx.fillStyle = "white";
+ctx.fillRect(100, 100, 50, 50);
