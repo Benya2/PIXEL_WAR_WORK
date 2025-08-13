@@ -1,8 +1,8 @@
+// Firebase SDK
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, deleteDoc, getDocs, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
-// 🔹 Конфигурация Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCwy4jVn9JIwXuIXVycYAv9EdPGPkgIJvA",
   authDomain: "pixellox.firebaseapp.com",
@@ -13,66 +13,101 @@ const firebaseConfig = {
   measurementId: "G-YC8KLBZC2V"
 };
 
-// 🔹 Инициализация
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// 🔹 HTML элементы
+// Элементы
+const game = document.getElementById("game");
+const ctx = game.getContext("2d");
+const cursor = document.getElementById("cursor");
+const colorsChoice = document.getElementById("colorsChoice");
 const adminPanel = document.getElementById("adminPanel");
-const registerBtn = document.getElementById("registerBtn");
-const loginBtn = document.getElementById("loginBtn");
-const emailInput = document.getElementById("emailInput");
-const passwordInput = document.getElementById("passwordInput");
-const authStatus = document.getElementById("authStatus");
-const banBtn = document.getElementById("banBtn");
-const banEmail = document.getElementById("banEmail");
-const clearAllBtn = document.getElementById("clearAllBtn");
 
-// 🔹 Регистрация
-registerBtn.addEventListener("click", async () => {
-  try {
-    await createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
-    authStatus.textContent = "Регистрация успешна!";
-  } catch (err) {
-    authStatus.textContent = err.message;
+// Размеры сетки
+const gridCellSize = 10;
+game.width = 1200;
+game.height = 600;
+
+let currentColor = "#ff5a5f";
+let isDrawing = false;
+
+// Цвета
+colorsChoice.querySelectorAll("div").forEach(div => {
+  div.addEventListener("click", () => {
+    currentColor = div.dataset.color;
+  });
+});
+
+// Отрисовка сетки
+function drawGrid() {
+  ctx.clearRect(0, 0, game.width, game.height);
+  ctx.strokeStyle = "#ccc";
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < game.width; x += gridCellSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, game.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y < game.height; y += gridCellSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(game.width, y);
+    ctx.stroke();
+  }
+}
+
+// Загрузка пикселей
+onSnapshot(collection(db, "pixels"), snapshot => {
+  drawGrid();
+  snapshot.forEach(doc => {
+    const { x, y, color } = doc.data();
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, gridCellSize, gridCellSize);
+  });
+});
+
+// Ставим пиксель
+async function placePixel(mouseX, mouseY) {
+  const gridX = Math.floor(mouseX / gridCellSize) * gridCellSize;
+  const gridY = Math.floor(mouseY / gridCellSize) * gridCellSize;
+  await setDoc(doc(db, "pixels", `${gridX}_${gridY}`), {
+    x: gridX,
+    y: gridY,
+    color: currentColor
+  });
+}
+
+// Обработка кликов
+game.addEventListener("mousedown", e => {
+  isDrawing = true;
+  placePixel(e.offsetX, e.offsetY);
+});
+game.addEventListener("mouseup", () => isDrawing = false);
+game.addEventListener("mousemove", e => {
+  cursor.style.left = `${e.pageX}px`;
+  cursor.style.top = `${e.pageY}px`;
+  if (isDrawing) {
+    placePixel(e.offsetX, e.offsetY);
   }
 });
 
-// 🔹 Вход
-loginBtn.addEventListener("click", async () => {
-  try {
-    await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
-    authStatus.textContent = "Вход успешен!";
-  } catch (err) {
-    authStatus.textContent = err.message;
+// Авторизация
+onAuthStateChanged(auth, user => {
+  if (user) {
+    if (user.email === "logo100153@gmail.com") {
+      adminPanel.style.display = "block";
+    }
   }
 });
 
-// 🔹 Проверка админа
-onAuthStateChanged(auth, (user) => {
-  if (user && user.email === "logo100153@gmail.com") {
-    adminPanel.style.display = "flex";
-  } else {
-    adminPanel.style.display = "none";
+// Очистка всей карты
+document.getElementById("clearAllBtn").addEventListener("click", async () => {
+  if (confirm("Вы уверены, что хотите удалить все пиксели?")) {
+    const pixels = await getDocs(collection(db, "pixels"));
+    pixels.forEach(async pixel => {
+      await deleteDoc(doc(db, "pixels", pixel.id));
+    });
   }
 });
-
-// 🔹 Бан игрока (заглушка, нужно будет дописать логику)
-banBtn.addEventListener("click", () => {
-  alert(`Игрок ${banEmail.value} забанен (фейк, допиши Firestore-логику)`);
-});
-
-// 🔹 Очистка всей карты
-clearAllBtn.addEventListener("click", async () => {
-  if (!confirm("Вы уверены, что хотите удалить все пиксели?")) return;
-  const pixelsRef = collection(db, "pixels");
-  const snapshot = await getDocs(pixelsRef);
-  for (const docSnap of snapshot.docs) {
-    await deleteDoc(doc(db, "pixels", docSnap.id));
-  }
-  alert("Карта очищена!");
-});
-
-// 🔹 Здесь твой код игры с пикселями...
-// (нужно вставить сюда твой рабочий canvas-скрипт)
