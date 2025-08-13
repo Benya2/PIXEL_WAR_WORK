@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -45,7 +45,7 @@ colors.forEach(c => {
   colorsChoiceEl.appendChild(div);
 });
 
-// Рисуем сетку
+// Отрисовка сетки
 function drawGrid() {
   ctx.clearRect(0,0,game.width, game.height);
   ctx.beginPath();
@@ -60,7 +60,18 @@ function drawGrid() {
   }
   ctx.stroke();
 }
-drawGrid();
+
+// Подписка на пиксели Firestore
+onSnapshot(collection(db,"pixels"), snapshot=>{
+  drawGrid();
+  snapshot.forEach(doc=>{
+    const d = doc.data();
+    if(d.color!=="#FFFFFF"){
+      ctx.fillStyle = d.color;
+      ctx.fillRect(d.x,d.y,gridCellSize,gridCellSize);
+    }
+  });
+});
 
 // Курсор по клеткам
 game.addEventListener('mousemove', e=>{
@@ -71,25 +82,18 @@ game.addEventListener('mousemove', e=>{
   cursor.style.top = y + "px";
 });
 
-// Рисуем пиксель
+// Рисование пикселя (только для авторизованных)
 async function placePixel() {
+  if(!auth.currentUser) return alert("Войдите чтобы рисовать!");
   if(!canPlace) return;
   canPlace = false;
   const x = parseInt(cursor.style.left);
   const y = parseInt(cursor.style.top);
-  const pixelRef = doc(db, "pixels", `${x}-${y}`);
-  try {
-    if(currentColor === "#FFFFFF"){
-      await deleteDoc(pixelRef);
-      drawGrid();
-    } else {
-      await setDoc(pixelRef, {x,y,color:currentColor});
-      ctx.fillStyle = currentColor;
-      ctx.fillRect(x,y,gridCellSize,gridCellSize);
-    }
-  } catch(err){
-    console.error(err);
-  }
+  const pixelRef = doc(db,"pixels",`${x}-${y}`);
+  try{
+    if(currentColor==="#FFFFFF") await deleteDoc(pixelRef);
+    else await setDoc(pixelRef,{x,y,color:currentColor});
+  } catch(err){ console.error(err); }
   startReload();
 }
 
@@ -110,27 +114,12 @@ function startReload(){
 game.addEventListener('click', placePixel);
 cursor.addEventListener('click', placePixel);
 
-// Подписка на пиксели
-onSnapshot(collection(db,"pixels"), snapshot=>{
-  drawGrid();
-  snapshot.forEach(doc=>{
-    const d = doc.data();
-    if(d.color !== "#FFFFFF"){
-      ctx.fillStyle = d.color;
-      ctx.fillRect(d.x,d.y,gridCellSize,gridCellSize);
-    }
-  });
-});
-
 // Авторизация и админка
 authButton.addEventListener('click', async ()=>{
-  if(auth.currentUser){
-    await signOut(auth);
-    return;
-  }
+  if(auth.currentUser){ await signOut(auth); return; }
   const email = prompt("Email:");
   const pass = prompt("Password:");
-  if(!email || !pass) return;
+  if(!email||!pass) return;
   try{
     await signInWithEmailAndPassword(auth,email,pass);
     alert("Вошли!");
@@ -154,6 +143,7 @@ onAuthStateChanged(auth,user=>{
 
 // Очистка карты
 clearAllPixelsBtn.addEventListener('click', async ()=>{
-  const snapshot = await collection(db,"pixels").get();
+  if(!auth.currentUser) return alert("Только админ!");
+  const snapshot = await getDocs(collection(db,"pixels"));
   snapshot.forEach(doc=>deleteDoc(doc.ref));
 });
