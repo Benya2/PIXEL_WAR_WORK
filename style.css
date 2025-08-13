@@ -1,23 +1,23 @@
 body {
-    margin: 0;
     font-family: Arial, sans-serif;
+    text-align: center;
     background: #222;
     color: white;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
 }
 
-#authPanel {
-    margin: 20px;
-}
-
-#authPanel input, #authPanel button {
-    padding: 8px;
+input, button {
     margin: 5px;
+    padding: 5px;
 }
 
 canvas {
+    border: 1px solid white;
+    margin: 10px 0;
+}
+
+#admin-panel {
     background: #333;
-    border: 2px solid #555;
+    padding: 10px;
+    margin-top: 20px;
+    border-radius: 10px;
 }
