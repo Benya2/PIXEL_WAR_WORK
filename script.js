@@ -1,7 +1,6 @@
-// Firebase SDK
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, doc, setDoc, deleteDoc, getDocs, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot, getDocs, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCwy4jVn9JIwXuIXVycYAv9EdPGPkgIJvA",
@@ -16,98 +15,107 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
 
-// Элементы
 const game = document.getElementById("game");
 const ctx = game.getContext("2d");
-const cursor = document.getElementById("cursor");
-const colorsChoice = document.getElementById("colorsChoice");
-const adminPanel = document.getElementById("adminPanel");
-
-// Размеры сетки
-const gridCellSize = 10;
 game.width = 1200;
 game.height = 600;
 
-let currentColor = "#ff5a5f";
-let isDrawing = false;
+const gridSize = 10;
+let currentColor = "#000000";
 
-// Цвета
-colorsChoice.querySelectorAll("div").forEach(div => {
-  div.addEventListener("click", () => {
-    currentColor = div.dataset.color;
-  });
+// Панель цветов
+const colors = ["#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"];
+const colorsChoice = document.getElementById("colorsChoice");
+colors.forEach(c => {
+    const div = document.createElement("div");
+    div.style.backgroundColor = c;
+    div.addEventListener("click", () => currentColor = c);
+    colorsChoice.appendChild(div);
+});
+
+// Курсор
+const cursor = document.getElementById("cursor");
+game.addEventListener("mousemove", e => {
+    const rect = game.getBoundingClientRect();
+    let x = Math.floor((e.clientX - rect.left) / gridSize) * gridSize;
+    let y = Math.floor((e.clientY - rect.top) / gridSize) * gridSize;
+    cursor.style.left = rect.left + x + "px";
+    cursor.style.top = rect.top + y + "px";
 });
 
 // Отрисовка сетки
 function drawGrid() {
-  ctx.clearRect(0, 0, game.width, game.height);
-  ctx.strokeStyle = "#ccc";
-  ctx.lineWidth = 0.5;
-  for (let x = 0; x < game.width; x += gridCellSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, game.height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < game.height; y += gridCellSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(game.width, y);
-    ctx.stroke();
-  }
+    ctx.clearRect(0, 0, game.width, game.height);
+    ctx.strokeStyle = "#ddd";
+    for (let x = 0; x < game.width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, game.height);
+        ctx.stroke();
+    }
+    for (let y = 0; y < game.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(game.width, y);
+        ctx.stroke();
+    }
 }
 
-// Загрузка пикселей
-onSnapshot(collection(db, "pixels"), snapshot => {
-  drawGrid();
-  snapshot.forEach(doc => {
-    const { x, y, color } = doc.data();
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, gridCellSize, gridCellSize);
-  });
-});
+// Загрузка пикселей из Firebase
+function loadPixels() {
+    onSnapshot(collection(db, "pixels"), snapshot => {
+        drawGrid();
+        snapshot.forEach(docSnap => {
+            const p = docSnap.data();
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, gridSize, gridSize);
+        });
+    });
+}
+loadPixels();
 
 // Ставим пиксель
-async function placePixel(mouseX, mouseY) {
-  const gridX = Math.floor(mouseX / gridCellSize) * gridCellSize;
-  const gridY = Math.floor(mouseY / gridCellSize) * gridCellSize;
-  await setDoc(doc(db, "pixels", `${gridX}_${gridY}`), {
-    x: gridX,
-    y: gridY,
-    color: currentColor
-  });
-}
-
-// Обработка кликов
-game.addEventListener("mousedown", e => {
-  isDrawing = true;
-  placePixel(e.offsetX, e.offsetY);
-});
-game.addEventListener("mouseup", () => isDrawing = false);
-game.addEventListener("mousemove", e => {
-  cursor.style.left = `${e.pageX}px`;
-  cursor.style.top = `${e.pageY}px`;
-  if (isDrawing) {
-    placePixel(e.offsetX, e.offsetY);
-  }
+game.addEventListener("click", e => {
+    const rect = game.getBoundingClientRect();
+    let x = Math.floor((e.clientX - rect.left) / gridSize) * gridSize;
+    let y = Math.floor((e.clientY - rect.top) / gridSize) * gridSize;
+    setDoc(doc(db, "pixels", `${x}_${y}`), { x, y, color: currentColor });
 });
 
 // Авторизация
-onAuthStateChanged(auth, user => {
-  if (user) {
-    if (user.email === "logo100153@gmail.com") {
-      adminPanel.style.display = "block";
-    }
-  }
+document.getElementById("authButton").addEventListener("click", async () => {
+    await signInWithPopup(auth, provider);
 });
 
-// Очистка всей карты
-document.getElementById("clearAllBtn").addEventListener("click", async () => {
-  if (confirm("Вы уверены, что хотите удалить все пиксели?")) {
+onAuthStateChanged(auth, user => {
+    if (user) {
+        if (user.email === "logo100153@gmail.com") {
+            document.getElementById("adminPanel").style.display = "block";
+        }
+    }
+});
+
+// Админка
+document.getElementById("banBtn").addEventListener("click", () => {
+    const email = document.getElementById("banEmail").value;
+    alert(`Пользователь ${email} забанен (здесь можно добавить бан в Firebase)`);
+});
+
+document.getElementById("clearAreaBtn").addEventListener("click", async () => {
     const pixels = await getDocs(collection(db, "pixels"));
-    pixels.forEach(async pixel => {
-      await deleteDoc(doc(db, "pixels", pixel.id));
+    pixels.forEach(async (docSnap) => {
+        const p = docSnap.data();
+        if (p.x < 200 && p.y < 200) { // Пример: область 200x200
+            await deleteDoc(doc(db, "pixels", docSnap.id));
+        }
     });
-  }
+});
+
+document.getElementById("clearMapBtn").addEventListener("click", async () => {
+    const pixels = await getDocs(collection(db, "pixels"));
+    pixels.forEach(async (docSnap) => {
+        await deleteDoc(doc(db, "pixels", docSnap.id));
+    });
 });
