@@ -83,30 +83,6 @@ game.addEventListener('mousemove', e => {
   cursor.style.top = (rect.top + y - rect.top) + "px";
 });
 
-// Курсор по клеткам с ограничениями
-game.addEventListener('mousemove', e => {
-  const rect = game.getBoundingClientRect();
-  
-  // Определяем клетку, на которую навели мышь
-  let x = Math.floor((e.clientX - rect.left) / gridCellSize) * gridCellSize;
-  let y = Math.floor((e.clientY - rect.top) / gridCellSize) * gridCellSize;
-
-  // Смещаем вниз и вправо (например, на 1 пиксель)
-  x += 1;
-  y += 1;
-
-  // Ограничения по краям карты
-  if (x < 0) x = 0;
-  if (y < 0) y = 0;
-  if (x > game.width - gridCellSize) x = game.width - gridCellSize;
-  if (y > game.height - gridCellSize) y = game.height - gridCellSize;
-
-  // Устанавливаем позицию курсора
-  cursor.style.left = x + "px";
-  cursor.style.top = y + "px";
-});
-
-
 // Рисование пикселя (только для авторизованных)
 async function placePixel() {
   if(!auth.currentUser) return alert("Войдите чтобы рисовать!");
