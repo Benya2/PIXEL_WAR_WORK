@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // 🔑 Твои ключи Firebase
 const firebaseConfig = {
@@ -14,46 +15,75 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const registerBtn = document.getElementById('registerBtn');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
+// Email админа
+const adminEmail = "logo100153@gmail.com";
 
-// Регистрация
-registerBtn.addEventListener('click', () => {
-    createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
-        .catch(err => alert(err.message));
-});
+const adminPanel = document.getElementById("admin-panel");
+const loginBtn = document.getElementById("loginBtn");
+const registerBtn = document.getElementById("registerBtn");
+const logoutBtn = document.getElementById("logoutBtn");
 
 // Вход
-loginBtn.addEventListener('click', () => {
-    signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
-        .catch(err => alert(err.message));
-});
-
-// Выход
-logoutBtn.addEventListener('click', () => {
-    signOut(auth);
-});
-
-// Проверка состояния
-onAuthStateChanged(auth, user => {
-    if (user) {
-        logoutBtn.style.display = 'inline-block';
-        loginBtn.style.display = 'none';
-        registerBtn.style.display = 'none';
-    } else {
-        logoutBtn.style.display = 'none';
-        loginBtn.style.display = 'inline-block';
-        registerBtn.style.display = 'inline-block';
+loginBtn.addEventListener("click", async () => {
+    const email = document.getElementById("email").value;
+    const pass = document.getElementById("password").value;
+    try {
+        await signInWithEmailAndPassword(auth, email, pass);
+        checkAdmin(email);
+    } catch (err) {
+        alert(err.message);
     }
 });
 
-// 🎨 Тут можно будет добавить код рисования для PixelPlanet
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+// Регистрация
+registerBtn.addEventListener("click", async () => {
+    const email = document.getElementById("email").value;
+    const pass = document.getElementById("password").value;
+    try {
+        await createUserWithEmailAndPassword(auth, email, pass);
+        alert("Аккаунт создан!");
+    } catch (err) {
+        alert(err.message);
+    }
+});
 
-ctx.fillStyle = "white";
-ctx.fillRect(100, 100, 50, 50);
+// Выход
+logoutBtn.addEventListener("click", async () => {
+    await signOut(auth);
+    adminPanel.style.display = "none";
+    logoutBtn.style.display = "none";
+});
+
+// Проверка админа
+function checkAdmin(email) {
+    if (email === adminEmail) {
+        adminPanel.style.display = "block";
+    }
+    logoutBtn.style.display = "inline-block";
+}
+
+// Бан игрока
+document.getElementById("banBtn").addEventListener("click", async () => {
+    const email = document.getElementById("banEmail").value;
+    if (!email) return alert("Введите email");
+    await setDoc(doc(db, "banned", email), { banned: true });
+    alert(`Игрок ${email} забанен`);
+});
+
+// Очистка зоны
+document.getElementById("clearBtn").addEventListener("click", () => {
+    const x = parseInt(document.getElementById("clearX").value);
+    const y = parseInt(document.getElementById("clearY").value);
+    const size = parseInt(document.getElementById("clearSize").value);
+    alert(`Зона (${x},${y}) размером ${size} очищена (здесь будет логика)`);
+});
+
+// Установка пикселя
+document.getElementById("placePixelBtn").addEventListener("click", () => {
+    const x = parseInt(document.getElementById("pixelX").value);
+    const y = parseInt(document.getElementById("pixelY").value);
+    const color = document.getElementById("pixelColor").value;
+    alert(`Поставлен пиксель в (${x},${y}) цветом ${color} (здесь будет логика)`);
+});
