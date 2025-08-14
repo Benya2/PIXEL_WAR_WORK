@@ -132,7 +132,7 @@ authButton.addEventListener('click', async () => {
     return;
   }
 
-  const action = prompt("Введите 1 чтобы войти, или 2 чтобы создать новый аккаунт:");
+  const action = prompt("Enter 1 to sign in, or 2 to create a new account:");
   if (!action || (action !== "1" && action !== "2")) return;
 
   const email = prompt("Email:");
@@ -142,10 +142,10 @@ authButton.addEventListener('click', async () => {
   try {
     if (action === "1") {
       await signInWithEmailAndPassword(auth, email, pass);
-      alert("Вошли!");
+      alert("Come in!");
     } else if (action === "2") {
       await createUserWithEmailAndPassword(auth, email, pass);
-      alert("Аккаунт создан!");
+      alert("Account created!");
     }
   } catch (e) {
     alert(e.message);
@@ -184,4 +184,5 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
