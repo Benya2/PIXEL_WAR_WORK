@@ -95,7 +95,7 @@ game.addEventListener('mousemove', e=>{
 
 // Рисование пикселя
 async function placePixel() {
-  if(!auth.currentUser) return alert("Войдите чтобы рисовать!");
+  if(!auth.currentUser) return alert("Login to draw!");
   if(!canPlace) return;
   canPlace = false;
   const x = parseInt(cursor.style.left);
@@ -111,14 +111,14 @@ async function placePixel() {
 // Кулдаун
 function startReload(){
   let t = reloadTime;
-  reloadTimerEl.innerText = `Перезарядка: ${t} сек`;
+  reloadTimerEl.innerText = `Reload: ${t} сек`;
   const interval = setInterval(()=>{
     t--;
     if(t<=0){
       clearInterval(interval);
       canPlace = true;
-      reloadTimerEl.innerText = "Готово!";
-    } else reloadTimerEl.innerText = `Перезарядка: ${t} сек`;
+      reloadTimerEl.innerText = "Ready!";
+    } else reloadTimerEl.innerText = `Reload: ${t} сек`;
   },1000);
 }
 
@@ -184,5 +184,6 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
