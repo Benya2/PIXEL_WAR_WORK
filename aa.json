@@ -1,0 +1,4 @@
+"bannedEmails": {
+  "badguy@example.com": true,
+  "troll@spam.com": true
+}
