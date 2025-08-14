@@ -100,7 +100,7 @@ async function placePixel() {
   canPlace = false;
   const x = parseInt(cursor.style.left);
   const y = parseInt(cursor.style.top);
-  const pixelRef = doc(db,"pixels",${x}-${y});
+  const pixelRef = doc(db,"pixels",`${x}-${y}`);
   try{
     if(currentColor==="#FFFFFF") await deleteDoc(pixelRef);
     else await setDoc(pixelRef,{x,y,color:currentColor});
@@ -111,14 +111,14 @@ async function placePixel() {
 // Кулдаун
 function startReload(){
   let t = reloadTime;
-  reloadTimerEl.innerText = Reload: ${t} sec;
+  reloadTimerEl.innerText = `Reload: ${t} сек`;
   const interval = setInterval(()=>{
     t--;
     if(t<=0){
       clearInterval(interval);
       canPlace = true;
       reloadTimerEl.innerText = "Ready!";
-    } else reloadTimerEl.innerText = Reload: ${t} sec;
+    } else reloadTimerEl.innerText = `Reload: ${t} сек`;
   },1000);
 }
 
