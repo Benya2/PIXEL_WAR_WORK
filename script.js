@@ -125,32 +125,49 @@ function startReload(){
 game.addEventListener('click', placePixel);
 cursor.addEventListener('click', placePixel);
 
-// Авторизация
-authButton.addEventListener('click', async ()=>{
-  if(auth.currentUser){ await signOut(auth); return; }
+// Авторизация с выбором действия
+authButton.addEventListener('click', async () => {
+  if (auth.currentUser) {
+    await signOut(auth);
+    return;
+  }
+
+  const action = prompt("Введите 1 чтобы войти, или 2 чтобы создать новый аккаунт:");
+  if (!action || (action !== "1" && action !== "2")) return;
+
   const email = prompt("Email:");
   const pass = prompt("Password:");
-  if(!email||!pass) return;
-  try{
-    await signInWithEmailAndPassword(auth,email,pass);
-    alert("Вошли!");
-  }catch(e){
-    if(e.code==="auth/user-not-found"){
-      await createUserWithEmailAndPassword(auth,email,pass);
+  if (!email || !pass) return;
+
+  try {
+    if (action === "1") {
+      await signInWithEmailAndPassword(auth, email, pass);
+      alert("Вошли!");
+    } else if (action === "2") {
+      await createUserWithEmailAndPassword(auth, email, pass);
       alert("Аккаунт создан!");
-    } else alert(e.message);
+    }
+  } catch (e) {
+    alert(e.message);
   }
 });
 
-onAuthStateChanged(auth,user=>{
-  if(user){
-    authButton.textContent="Log Out";
-    adminPanel.style.display="block";
+// Проверка, кто вошёл
+onAuthStateChanged(auth, user => {
+  if (user) {
+    authButton.textContent = "Log Out";
+    // Админка только для logo100153@gmail.com
+    if (user.email === "logo100153@gmail.com") {
+      adminPanel.style.display = "block";
+    } else {
+      adminPanel.style.display = "none";
+    }
   } else {
-    authButton.textContent="Log In";
-    adminPanel.style.display="none";
+    authButton.textContent = "Log In";
+    adminPanel.style.display = "none";
   }
 });
+
 
 // Очистка карты
 clearAllPixelsBtn.addEventListener('click', async ()=>{
@@ -167,3 +184,4 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
