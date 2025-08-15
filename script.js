@@ -184,20 +184,19 @@ function drawMarkers() {
   });
 }
 
-// Парсим координаты с поддержкой размеров
+// Парсим координаты с поддержкой размеров в клетках
 function parseCoords() {
   markers = [];
   const value = coordsInput.value.trim();
   if (!value) return;
 
   value.split(",").forEach(part => {
-    let [xStr, yStr, wStr, hStr] = part.trim().split(/\s+/);
+    let [xCell, yCell, wCell, hCell] = part.trim().split(/\s+/);
 
-    let startX = Math.floor(parseInt(xStr) / gridCellSize) * gridCellSize;
-    let startY = Math.floor(parseInt(yStr) / gridCellSize) * gridCellSize;
-
-    let width = parseInt(wStr) || 1;   // по умолчанию 1
-    let height = parseInt(hStr) || 1;  // по умолчанию 1
+    let startX = parseInt(xCell) * gridCellSize;
+    let startY = parseInt(yCell) * gridCellSize;
+    let width = parseInt(wCell) || 1;
+    let height = parseInt(hCell) || 1;
 
     if (isNaN(startX) || isNaN(startY) || isNaN(width) || isNaN(height)) return;
 
@@ -265,7 +264,6 @@ removePixelBtn.addEventListener('click', async () => {
 });
 
 
-
 // Очистка карты
 clearAllPixelsBtn.addEventListener('click', async ()=>{
   if(!auth.currentUser) return alert("Только админ!");
@@ -281,6 +279,7 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
 
