@@ -1,10 +1,8 @@
-// ===== Imports =====
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
-import { getDatabase, ref, remove } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
-// ===== Firebase =====
+// ---------------- Firebase ----------------
 const firebaseConfig = {
   apiKey: "AIzaSyCwy4jVn9JIwXuIXVycYAv9EdPGPkgIJvA",
   authDomain: "pixellox.firebaseapp.com",
@@ -15,14 +13,13 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const rtdb = getDatabase(app);
 const auth = getAuth(app);
 
-// ===== DOM =====
+// ---------------- DOM ----------------
 const colorsChoiceEl = document.getElementById('colorsChoice');
 const game = document.getElementById('game');
 const ctx = game.getContext('2d');
-const cursor = document.getElementById('cursor'); // больше не используется, оставим скрытым
+const cursor = document.getElementById('cursor');
 const reloadTimerEl = document.getElementById('reloadTimer');
 const adminPanel = document.getElementById('adminPanel');
 const clearAllPixelsBtn = document.getElementById('clearAllPixels');
@@ -32,21 +29,29 @@ const coordsInput = document.getElementById('coordsInput');
 const addPixelBtn = document.getElementById('addPixelBtn');
 const removePixelBtn = document.getElementById('removePixelBtn');
 
-const gridCellSize = 10;
 game.width = 1200;
 game.height = 600;
 
-// ===== State =====
+// ---------------- Переменные ----------------
 let currentColor = "#000000";
 let canPlace = true;
 const reloadTime = 5;
+const gridCellSize = 10;
 
-// ===== Colors =====
+let cameraX = -600; // центр карты по X
+let cameraY = -300; // центр карты по Y
+let scale = 1; // зум
+
+let dragging = false;
+let dragStart = {x:0, y:0};
+let cameraStart = {x:0, y:0};
+
+// ---------------- Цвета ----------------
 const colors = ["#FFFFFF","#B39DDB","#9FA8DA","#90CAF9","#81D4FA","#80DEEA","#4DB6AC","#66BB6A","#9CCC65","#CDDC39","#FFEB3B","#FFC107","#FF9800","#FF5722","#A1887F","#E0E0E0","#000000"];
 colors.forEach(c=>{
   const div = document.createElement('div');
   div.style.backgroundColor = c;
-  div.addEventListener('click', ()=>{
+  div.addEventListener('click', ()=> {
     currentColor = c;
     document.querySelectorAll('#colorsChoice div').forEach(el=>el.classList.remove('selected'));
     div.classList.add('selected');
@@ -54,182 +59,133 @@ colors.forEach(c=>{
   colorsChoiceEl.appendChild(div);
 });
 
-// ===== World map background (как в pixelplanet — карта стран) =====
-// Положи рядом файл world.png (например 1200x600). Можно больше — всё равно зум/панорамирование.
-const worldMap = new Image();
-worldMap.src = 'world.png';
-worldMap.onload = () => renderAll();
+// ---------------- Камера и курсор ----------------
+function screenToWorld(x, y){
+  return {x: Math.floor(cameraX + x / (gridCellSize*scale)), y: Math.floor(cameraY + y / (gridCellSize*scale))};
+}
+function worldToScreen(x, y){
+  return {x: (x - cameraX)*gridCellSize*scale, y: (y - cameraY)*gridCellSize*scale};
+}
 
-// ===== Camera / Zoom / Pan =====
-let camX = 0;  // мировые координаты (px)
-let camY = 0;
-let scale = 1;
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 6;
-
-let isPanning = false;
-let lastMouseX = 0, lastMouseY = 0;
-
-function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-function screenToWorld(sx, sy) {
+game.addEventListener('mousemove', e=>{
   const rect = game.getBoundingClientRect();
-  const x = (sx - rect.left)/scale + camX;
-  const y = (sy - rect.top)/scale + camY;
-  return [x, y];
+  let mx = e.clientX - rect.left;
+  let my = e.clientY - rect.top;
+
+  const world = screenToWorld(mx, my);
+  const screen = worldToScreen(world.x, world.y);
+  cursor.style.left = screen.x + "px";
+  cursor.style.top = screen.y + "px";
+  cursor.style.width = gridCellSize*scale + "px";
+  cursor.style.height = gridCellSize*scale + "px";
+
+  if(dragging){
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    cameraX = cameraStart.x - dx/(gridCellSize*scale);
+    cameraY = cameraStart.y - dy/(gridCellSize*scale);
+    render();
+  }
+});
+
+game.addEventListener('mousedown', e=>{
+  if(e.button===2){ // ПКМ для перемещения
+    dragging = true;
+    dragStart = {x: e.clientX, y: e.clientY};
+    cameraStart = {x: cameraX, y: cameraY};
+  }
+});
+game.addEventListener('mouseup', e=>{
+  if(e.button===2) dragging = false;
+});
+
+game.addEventListener('wheel', e=>{
+  const rect = game.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const worldBefore = screenToWorld(mx, my);
+
+  scale *= e.deltaY < 0 ? 1.1 : 0.9;
+  if(scale < 0.5) scale=0.5;
+  if(scale > 5) scale=5;
+
+  const worldAfter = screenToWorld(mx, my);
+  cameraX += worldBefore.x - worldAfter.x;
+  cameraY += worldBefore.y - worldAfter.y;
+
+  render();
+  e.preventDefault();
+});
+
+// ---------------- Рисование ----------------
+let pixelsCache = new Map();
+
+async function loadVisiblePixels(){
+  const viewLeft = Math.floor(cameraX);
+  const viewTop = Math.floor(cameraY);
+  const viewRight = Math.ceil(cameraX + game.width/(gridCellSize*scale));
+  const viewBottom = Math.ceil(cameraY + game.height/(gridCellSize*scale));
+
+  const q1 = query(collection(db,"pixels"), 
+      where("x", ">=", viewLeft),
+      where("x", "<=", viewRight));
+  const snapshot = await getDocs(q1);
+
+  pixelsCache.clear();
+  snapshot.forEach(doc=>{
+    const d = doc.data();
+    if(d.y >= viewTop && d.y <= viewBottom)
+      pixelsCache.set(`${d.x}-${d.y}`, d.color);
+  });
 }
-function snapToGrid(wx, wy) {
-  return [
-    Math.floor(wx / gridCellSize) * gridCellSize,
-    Math.floor(wy / gridCellSize) * gridCellSize
-  ];
-}
 
-// Наведённая клетка
-let hoverCellX = 0, hoverCellY = 0;
-
-// ===== Pixels cache (для быстрого рендера) =====
-const pixelsCache = new Map(); // key: "x-y" -> {x,y,color}
-
-// ===== Admin markers =====
-let markers = []; // элементы: [x,y] в МИРОВЫХ px (кратно gridCellSize)
-
-// ===== Grid + Draw =====
-function renderAll() {
-  // сброс и очистка
-  ctx.setTransform(1,0,0,1,0,0);
+function render(){
   ctx.clearRect(0,0,game.width,game.height);
 
-  // трансформа камеры
-  ctx.setTransform(scale, 0, 0, scale, -camX * scale, -camY * scale);
-
-  const viewLeft = camX;
-  const viewTop = camY;
-  const viewRight = camX + game.width / scale;
-  const viewBottom = camY + game.height / scale;
-
-  // фон карта мира
-  if (worldMap.complete && worldMap.naturalWidth) {
-    // растянем на размер мира (0..game.width x 0..game.height)
-    ctx.drawImage(worldMap, 0, 0, game.width, game.height);
-  } else {
-    // запасной фон
-    ctx.fillStyle = '#eef6ff';
-    ctx.fillRect(0,0,game.width,game.height);
-  }
-
-  // сетка (только в видимой области)
+  // Сетка
   ctx.beginPath();
   ctx.strokeStyle = "#ccc";
-  let startX = Math.floor(viewLeft / gridCellSize) * gridCellSize;
-  for (let x = startX; x <= viewRight; x += gridCellSize) {
-    ctx.moveTo(x, viewTop);
-    ctx.lineTo(x, viewBottom);
+  for(let x=Math.floor(cameraX); x<cameraX + game.width/(gridCellSize*scale); x++){
+    const sx = (x - cameraX)*gridCellSize*scale;
+    ctx.moveTo(sx,0);
+    ctx.lineTo(sx,game.height);
   }
-  let startY = Math.floor(viewTop / gridCellSize) * gridCellSize;
-  for (let y = startY; y <= viewBottom; y += gridCellSize) {
-    ctx.moveTo(viewLeft, y);
-    ctx.lineTo(viewRight, y);
+  for(let y=Math.floor(cameraY); y<cameraY + game.height/(gridCellSize*scale); y++){
+    const sy = (y - cameraY)*gridCellSize*scale;
+    ctx.moveTo(0,sy);
+    ctx.lineTo(game.width,sy);
   }
   ctx.stroke();
 
-  // пиксели
-  pixelsCache.forEach(d=>{
-    if (d.color !== "#FFFFFF") {
-      ctx.fillStyle = d.color;
-      ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
-    }
+  // Пиксели
+  pixelsCache.forEach((color,key)=>{
+    const [x,y] = key.split("-").map(Number);
+    const screen = worldToScreen(x,y);
+    ctx.fillStyle = color;
+    ctx.fillRect(screen.x, screen.y, gridCellSize*scale, gridCellSize*scale);
   });
-
-  // админ-маркеры
-  ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-  for (const [mx,my] of markers) {
-    ctx.fillRect(mx, my, gridCellSize, gridCellSize);
-  }
-
-  // подсветка наведённой клетки
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(hoverCellX, hoverCellY, gridCellSize, gridCellSize);
-
-  // сброс трансформа
-  ctx.setTransform(1,0,0,1,0,0);
 }
 
-// ===== Firestore subscription (замена старого прямого рисования) =====
-onSnapshot(collection(db,"pixels"), snapshot=>{
-  pixelsCache.clear();
-  snapshot.forEach(docSnap=>{
-    const d = docSnap.data();
-    pixelsCache.set(`${d.x}-${d.y}`, d);
-  });
-  renderAll();
-});
-
-// ===== Mouse handling (hover, pan, zoom) =====
-game.addEventListener('mousedown', (e)=>{
-  // панорамирование: правая/средняя кнопка или модификаторы
-  if (e.button === 1 || e.button === 2 || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
-    isPanning = true; lastMouseX = e.clientX; lastMouseY = e.clientY;
-    e.preventDefault();
-  }
-});
-window.addEventListener('mouseup', ()=>{ isPanning = false; });
-game.addEventListener('contextmenu', (e)=> e.preventDefault());
-
-game.addEventListener('mousemove', (e)=>{
-  if (isPanning) {
-    const dx = e.clientX - lastMouseX;
-    const dy = e.clientY - lastMouseY;
-    camX -= dx / scale;
-    camY -= dy / scale;
-    lastMouseX = e.clientX; lastMouseY = e.clientY;
-    renderAll();
-  }
-  const [wx, wy] = screenToWorld(e.clientX, e.clientY);
-  [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
-  renderAll();
-});
-
-game.addEventListener('wheel', (e)=>{
-  e.preventDefault();
-  const zoomFactor = 1.1;
-  const [beforeX, beforeY] = screenToWorld(e.clientX, e.clientY);
-  const dir = e.deltaY < 0 ? 1 : -1; // вверх — приблизить
-  const newScale = clamp(scale * (dir > 0 ? zoomFactor : 1/zoomFactor), MIN_SCALE, MAX_SCALE);
-  if (newScale === scale) return;
-  scale = newScale;
-
-  // держим точку под курсором на месте
-  const rect = game.getBoundingClientRect();
-  camX = beforeX - (e.clientX - rect.left)/scale;
-  camY = beforeY - (e.clientY - rect.top)/scale;
-  renderAll();
-}, { passive: false });
-
-// ===== Drawing (click to place) =====
-async function placePixelWithHover() {
+// ---------------- Пиксель (клик) ----------------
+game.addEventListener('click', async ()=>{
   if(!auth.currentUser) return alert("Login to draw!");
   if(!canPlace) return;
   canPlace = false;
-  const x = hoverCellX;
-  const y = hoverCellY;
-  const pixelRef = doc(db,"pixels",`${x}-${y}`);
-  try {
-    if (currentColor==="#FFFFFF") await deleteDoc(pixelRef);
-    else await setDoc(pixelRef,{x,y,color:currentColor});
-  } catch(err){ console.error(err); }
-  startReload();
-}
 
-game.addEventListener('click', (e)=>{
-  // если в режиме панорамирования — не ставим пиксель
-  if (isPanning || e.button !== 0) return;
-  placePixelWithHover();
+  const world = screenToWorld(parseInt(cursor.style.left), parseInt(cursor.style.top));
+  const x = world.x;
+  const y = world.y;
+  const pixelRef = doc(db,"pixels",`${x}-${y}`);
+  try{
+    if(currentColor==="#FFFFFF") await deleteDoc(pixelRef);
+    else await setDoc(pixelRef,{x,y,color:currentColor});
+  }catch(err){console.error(err);}
+  startReload();
+  await loadVisiblePixels();
+  render();
 });
 
-// Спрячем старый DOM-курсор, т.к. подсветка теперь рисуется на холсте
-if (cursor) cursor.style.display = 'none';
-
-// ===== Cooldown =====
+// ---------------- Кулдаун ----------------
 function startReload(){
   let t = reloadTime;
   reloadTimerEl.innerText = `Reload: ${t} сек`;
@@ -243,7 +199,7 @@ function startReload(){
   },1000);
 }
 
-// ===== Auth button =====
+// ---------------- Авторизация ----------------
 authButton.addEventListener('click', async () => {
   if (auth.currentUser) {
     await signOut(auth);
@@ -251,97 +207,106 @@ authButton.addEventListener('click', async () => {
   }
   const action = prompt("Enter 1 to sign in, or 2 to create a new account:");
   if (!action || (action !== "1" && action !== "2")) return;
-
   const email = prompt("Email:");
   const pass = prompt("Password:");
   if (!email || !pass) return;
 
   try {
-    if (action === "1") {
-      await signInWithEmailAndPassword(auth, email, pass);
-      alert("Come in!");
-    } else if (action === "2") {
-      await createUserWithEmailAndPassword(auth, email, pass);
-      alert("Account created!");
-    }
-  } catch (e) {
-    alert(e.message);
-  }
+    if (action === "1") await signInWithEmailAndPassword(auth,email,pass);
+    else await createUserWithEmailAndPassword(auth,email,pass);
+    alert("Success!");
+  } catch(e){ alert(e.message); }
 });
 
-// ===== Auth state (admin panel) =====
 onAuthStateChanged(auth, user => {
-  if (user) {
+  if(user){
     authButton.textContent = "Log Out";
-    if (user.email === "logo100153@gmail.com") {
-      adminPanel.style.display = "block";
-    } else {
-      adminPanel.style.display = "none";
-    }
-  } else {
+    if(user.email==="logo100153@gmail.com") adminPanel.style.display="block";
+    else adminPanel.style.display="none";
+  }else{
     authButton.textContent = "Log In";
-    adminPanel.style.display = "none";
+    adminPanel.style.display="none";
   }
 });
 
-// ===== Admin: coords input in cells + preview =====
-function parseCoords() {
-  markers = [];
+// ---------------- Админка ----------------
+let markers = [];
+
+function parseCoords(){
+  markers=[];
   const value = coordsInput.value.trim();
-  if (!value) { renderAll(); return; }
-
-  value.split(",").forEach(part => {
-    const [xCellStr, yCellStr, wCellStr, hCellStr] = part.trim().split(/\s+/);
-    const xCell = parseInt(xCellStr), yCell = parseInt(yCellStr);
-    const wCell = parseInt(wCellStr || '1'), hCell = parseInt(hCellStr || '1');
-    if (Number.isNaN(xCell) || Number.isNaN(yCell) || Number.isNaN(wCell) || Number.isNaN(hCell)) return;
-
-    const startX = xCell * gridCellSize;
-    const startY = yCell * gridCellSize;
-    for (let dx = 0; dx < wCell; dx++) {
-      for (let dy = 0; dy < hCell; dy++) {
-        const px = startX + dx * gridCellSize;
-        const py = startY + dy * gridCellSize;
-        if (px >= 0 && py >= 0 && px <= game.width - gridCellSize && py <= game.height - gridCellSize) {
-          markers.push([px, py]);
-        }
+  if(!value) return;
+  value.split(",").forEach(part=>{
+    let [xCell, yCell, wCell, hCell] = part.trim().split(/\s+/);
+    let startX = parseInt(xCell);
+    let startY = parseInt(yCell);
+    let width = parseInt(wCell) || 1;
+    let height = parseInt(hCell) || 1;
+    for(let dx=0; dx<width; dx++){
+      for(let dy=0; dy<height; dy++){
+        markers.push([startX+dx, startY+dy]);
       }
     }
   });
-  renderAll();
 }
 
-coordsInput.addEventListener('input', parseCoords);
+function drawMarkers(){
+  markers.forEach(([x,y])=>{
+    const screen = worldToScreen(x,y);
+    ctx.fillStyle = "rgba(255,0,0,0.5)";
+    ctx.fillRect(screen.x,screen.y,gridCellSize*scale,gridCellSize*scale);
+  });
+}
 
-async function adminApplyPixels(mode) { // 'add' | 'remove'
-  if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
-    return alert("Только админ!");
-  }
+coordsInput.addEventListener('input', ()=>{
   parseCoords();
-  let count = 0;
-  for (const [x,y] of markers) {
-    const pixelRef = doc(db,"pixels",`${x}-${y}`);
-    if (mode === 'add') { await setDoc(pixelRef, {x,y,color:currentColor}); count++; }
-    else { await deleteDoc(pixelRef); count++; }
-  }
-  alert(`${mode==='add'?'Добавлено':'Удалено'} пикселей: ${count}`);
-}
-
-addPixelBtn.addEventListener('click', ()=>adminApplyPixels('add'));
-removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
-
-// ===== Admin: clear map =====
-clearAllPixelsBtn.addEventListener('click', async ()=>{
-  if(!auth.currentUser) return alert("Только админ!");
-  const snapshot = await getDocs(collection(db,"pixels"));
-  snapshot.forEach(doc=>deleteDoc(doc.ref));
+  render();
+  drawMarkers();
 });
 
-// ===== Admin: ban user by id =====
+addPixelBtn.addEventListener('click', async ()=>{
+  if(!auth.currentUser || auth.currentUser.email!=="logo100153@gmail.com") return alert("Только админ!");
+  parseCoords();
+  for(let [x,y] of markers){
+    const pixelRef = doc(db,"pixels",`${x}-${y}`);
+    await setDoc(pixelRef,{x,y,color:currentColor});
+  }
+  await loadVisiblePixels();
+  render();
+  alert(`Добавлено пикселей: ${markers.length}`);
+});
+
+removePixelBtn.addEventListener('click', async ()=>{
+  if(!auth.currentUser || auth.currentUser.email!=="logo100153@gmail.com") return alert("Только админ!");
+  parseCoords();
+  for(let [x,y] of markers){
+    const pixelRef = doc(db,"pixels",`${x}-${y}`);
+    await deleteDoc(pixelRef);
+  }
+  await loadVisiblePixels();
+  render();
+  alert(`Удалено пикселей: ${markers.length}`);
+});
+
+// ---------------- Очистка карты ----------------
+clearAllPixelsBtn.addEventListener('click', async ()=>{
+  if(!auth.currentUser || auth.currentUser.email!=="logo100153@gmail.com") return alert("Только админ!");
+  const snapshot = await getDocs(collection(db,"pixels"));
+  snapshot.forEach(doc=>deleteDoc(doc.ref));
+  pixelsCache.clear();
+  render();
+});
+
+// ---------------- Бан пользователя ----------------
 banUserBtn.addEventListener('click', ()=>{
   if(!auth.currentUser) return alert("Только админ!");
   const userId = prompt("Введите UserID для бана:");
   if(!userId) return;
-  const userRef = ref(rtdb,'users/'+userId);
-  remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
+  alert("Бан пользователя не реализован в этом примере, нужно RTDB или Cloud Functions.");
 });
+
+// ---------------- Начальная загрузка ----------------
+(async ()=>{
+  await loadVisiblePixels();
+  render();
+})();
