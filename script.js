@@ -168,6 +168,85 @@ onAuthStateChanged(auth, user => {
   }
 });
 
+// ====== ДОПОЛНИТЕЛЬНЫЕ ПЕРЕМЕННЫЕ ======
+const coordXEl = document.getElementById('coordX');
+const coordYEl = document.getElementById('coordY');
+const addPixelBtn = document.getElementById('addPixelBtn');
+const removePixelBtn = document.getElementById('removePixelBtn');
+
+// Маркер для показа координат
+let markerX = null;
+let markerY = null;
+
+// Рисуем маркер
+function drawMarker() {
+  if (markerX !== null && markerY !== null) {
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+    ctx.fillRect(markerX, markerY, gridCellSize, gridCellSize);
+  }
+}
+
+// Перерисовка с учётом маркера
+onSnapshot(collection(db, "pixels"), snapshot => {
+  drawGrid();
+  snapshot.forEach(docSnap => {
+    const d = docSnap.data();
+    if (d.color !== "#FFFFFF") {
+      ctx.fillStyle = d.color;
+      ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
+    }
+  });
+  drawMarker();
+});
+
+// При вводе координат — обновляем маркер
+function updateMarkerFromInputs() {
+  let x = Math.floor(parseInt(coordXEl.value) / gridCellSize) * gridCellSize;
+  let y = Math.floor(parseInt(coordYEl.value) / gridCellSize) * gridCellSize;
+
+  if (isNaN(x) || isNaN(y)) {
+    markerX = null;
+    markerY = null;
+  } else {
+    markerX = Math.max(0, Math.min(x, game.width - gridCellSize));
+    markerY = Math.max(0, Math.min(y, game.height - gridCellSize));
+  }
+
+  // Перерисовать с маркером
+  const snapshot = collection(db, "pixels");
+  getDocs(snapshot).then(() => {
+    drawGrid();
+    onSnapshot(snapshot, () => {}); // перерисовка идёт из подписки
+  });
+}
+
+coordXEl.addEventListener('input', updateMarkerFromInputs);
+coordYEl.addEventListener('input', updateMarkerFromInputs);
+
+// Добавление пикселя по координатам
+addPixelBtn.addEventListener('click', async () => {
+  if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
+    return alert("Только админ!");
+  }
+  if (markerX === null || markerY === null) return alert("Введите координаты!");
+
+  const pixelRef = doc(db, "pixels", `${markerX}-${markerY}`);
+  await setDoc(pixelRef, { x: markerX, y: markerY, color: currentColor });
+  alert("Пиксель добавлен!");
+});
+
+// Удаление пикселя по координатам
+removePixelBtn.addEventListener('click', async () => {
+  if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
+    return alert("Только админ!");
+  }
+  if (markerX === null || markerY === null) return alert("Введите координаты!");
+
+  const pixelRef = doc(db, "pixels", `${markerX}-${markerY}`);
+  await deleteDoc(pixelRef);
+  alert("Пиксель удалён!");
+});
+
 
 // Очистка карты
 clearAllPixelsBtn.addEventListener('click', async ()=>{
@@ -184,4 +263,5 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
