@@ -184,20 +184,30 @@ function drawMarkers() {
   });
 }
 
-// Парсим координаты из поля
+// Парсим координаты с поддержкой размеров
 function parseCoords() {
   markers = [];
   const value = coordsInput.value.trim();
   if (!value) return;
 
-  value.split(",").forEach(pair => {
-    let [xStr, yStr] = pair.trim().split(/\s+/);
-    let x = Math.floor(parseInt(xStr) / gridCellSize) * gridCellSize;
-    let y = Math.floor(parseInt(yStr) / gridCellSize) * gridCellSize;
-    if (!isNaN(x) && !isNaN(y)) {
-      x = Math.max(0, Math.min(x, game.width - gridCellSize));
-      y = Math.max(0, Math.min(y, game.height - gridCellSize));
-      markers.push([x, y]);
+  value.split(",").forEach(part => {
+    let [xStr, yStr, wStr, hStr] = part.trim().split(/\s+/);
+
+    let startX = Math.floor(parseInt(xStr) / gridCellSize) * gridCellSize;
+    let startY = Math.floor(parseInt(yStr) / gridCellSize) * gridCellSize;
+
+    let width = parseInt(wStr) || 1;   // по умолчанию 1
+    let height = parseInt(hStr) || 1;  // по умолчанию 1
+
+    if (isNaN(startX) || isNaN(startY) || isNaN(width) || isNaN(height)) return;
+
+    // создаём прямоугольник
+    for (let dx = 0; dx < width; dx++) {
+      for (let dy = 0; dy < height; dy++) {
+        let px = Math.max(0, Math.min(startX + dx * gridCellSize, game.width - gridCellSize));
+        let py = Math.max(0, Math.min(startY + dy * gridCellSize, game.height - gridCellSize));
+        markers.push([px, py]);
+      }
     }
   });
 }
@@ -215,7 +225,7 @@ function redrawWithMarkers(snapshot) {
   drawMarkers();
 }
 
-// Подписка на пиксели (обновление с маркерами)
+// Подписка на пиксели
 onSnapshot(collection(db, "pixels"), snapshot => {
   redrawWithMarkers(snapshot);
 });
@@ -255,6 +265,7 @@ removePixelBtn.addEventListener('click', async () => {
 });
 
 
+
 // Очистка карты
 clearAllPixelsBtn.addEventListener('click', async ()=>{
   if(!auth.currentUser) return alert("Только админ!");
@@ -270,6 +281,7 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
 
