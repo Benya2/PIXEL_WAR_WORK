@@ -169,25 +169,41 @@ onAuthStateChanged(auth, user => {
 });
 
 // ====== ДОПОЛНИТЕЛЬНЫЕ ПЕРЕМЕННЫЕ ======
-const coordXEl = document.getElementById('coordX');
-const coordYEl = document.getElementById('coordY');
+const coordsInput = document.getElementById('coordsInput');
 const addPixelBtn = document.getElementById('addPixelBtn');
 const removePixelBtn = document.getElementById('removePixelBtn');
 
-// Маркер для показа координат
-let markerX = null;
-let markerY = null;
+// Массив для маркеров
+let markers = [];
 
-// Рисуем маркер
-function drawMarker() {
-  if (markerX !== null && markerY !== null) {
+// Рисуем маркеры
+function drawMarkers() {
+  markers.forEach(([mx, my]) => {
     ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-    ctx.fillRect(markerX, markerY, gridCellSize, gridCellSize);
-  }
+    ctx.fillRect(mx, my, gridCellSize, gridCellSize);
+  });
 }
 
-// Перерисовка с учётом маркера
-onSnapshot(collection(db, "pixels"), snapshot => {
+// Парсим координаты из поля
+function parseCoords() {
+  markers = [];
+  const value = coordsInput.value.trim();
+  if (!value) return;
+
+  value.split(",").forEach(pair => {
+    let [xStr, yStr] = pair.trim().split(/\s+/);
+    let x = Math.floor(parseInt(xStr) / gridCellSize) * gridCellSize;
+    let y = Math.floor(parseInt(yStr) / gridCellSize) * gridCellSize;
+    if (!isNaN(x) && !isNaN(y)) {
+      x = Math.max(0, Math.min(x, game.width - gridCellSize));
+      y = Math.max(0, Math.min(y, game.height - gridCellSize));
+      markers.push([x, y]);
+    }
+  });
+}
+
+// Перерисовка с маркерами
+function redrawWithMarkers(snapshot) {
   drawGrid();
   snapshot.forEach(docSnap => {
     const d = docSnap.data();
@@ -196,55 +212,46 @@ onSnapshot(collection(db, "pixels"), snapshot => {
       ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
     }
   });
-  drawMarker();
-});
-
-// При вводе координат — обновляем маркер
-function updateMarkerFromInputs() {
-  let x = Math.floor(parseInt(coordXEl.value) / gridCellSize) * gridCellSize;
-  let y = Math.floor(parseInt(coordYEl.value) / gridCellSize) * gridCellSize;
-
-  if (isNaN(x) || isNaN(y)) {
-    markerX = null;
-    markerY = null;
-  } else {
-    markerX = Math.max(0, Math.min(x, game.width - gridCellSize));
-    markerY = Math.max(0, Math.min(y, game.height - gridCellSize));
-  }
-
-  // Перерисовать с маркером
-  const snapshot = collection(db, "pixels");
-  getDocs(snapshot).then(() => {
-    drawGrid();
-    onSnapshot(snapshot, () => {}); // перерисовка идёт из подписки
-  });
+  drawMarkers();
 }
 
-coordXEl.addEventListener('input', updateMarkerFromInputs);
-coordYEl.addEventListener('input', updateMarkerFromInputs);
+// Подписка на пиксели (обновление с маркерами)
+onSnapshot(collection(db, "pixels"), snapshot => {
+  redrawWithMarkers(snapshot);
+});
 
-// Добавление пикселя по координатам
+// При вводе координат обновляем маркеры
+coordsInput.addEventListener('input', () => {
+  parseCoords();
+  getDocs(collection(db, "pixels")).then(snapshot => {
+    redrawWithMarkers(snapshot);
+  });
+});
+
+// Добавление пикселей
 addPixelBtn.addEventListener('click', async () => {
   if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
     return alert("Только админ!");
   }
-  if (markerX === null || markerY === null) return alert("Введите координаты!");
-
-  const pixelRef = doc(db, "pixels", `${markerX}-${markerY}`);
-  await setDoc(pixelRef, { x: markerX, y: markerY, color: currentColor });
-  alert("Пиксель добавлен!");
+  parseCoords();
+  for (let [x, y] of markers) {
+    const pixelRef = doc(db, "pixels", `${x}-${y}`);
+    await setDoc(pixelRef, { x, y, color: currentColor });
+  }
+  alert(`Добавлено пикселей: ${markers.length}`);
 });
 
-// Удаление пикселя по координатам
+// Удаление пикселей
 removePixelBtn.addEventListener('click', async () => {
   if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
     return alert("Только админ!");
   }
-  if (markerX === null || markerY === null) return alert("Введите координаты!");
-
-  const pixelRef = doc(db, "pixels", `${markerX}-${markerY}`);
-  await deleteDoc(pixelRef);
-  alert("Пиксель удалён!");
+  parseCoords();
+  for (let [x, y] of markers) {
+    const pixelRef = doc(db, "pixels", `${x}-${y}`);
+    await deleteDoc(pixelRef);
+  }
+  alert(`Удалено пикселей: ${markers.length}`);
 });
 
 
@@ -263,5 +270,6 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
