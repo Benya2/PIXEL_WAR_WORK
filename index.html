@@ -16,16 +16,18 @@
 <canvas id="game"></canvas>
 <div id="cursor"></div>
 <div id="reloadTimer"></div>
-    <div id="adminPanel" style="display:none">
-        <h3>Админка</h3>
-  <button id="clearAllPixels">Очистить всю карту</button>
-  <button id="banUser">Забанить пользователя</button>
+<div id="pixelAdminControls" style="margin-top: 10px;">
+  <input type="number" id="coordX" placeholder="X" style="width:60px;">
+  <input type="number" id="coordY" placeholder="Y" style="width:60px;">
+  <button id="addPixelBtn">Добавить</button>
+  <button id="removePixelBtn">Удалить</button>
 </div>
 
 
 <script type="module" src="script.js"></script>
 </body>
 </html>
+
 
 
 
