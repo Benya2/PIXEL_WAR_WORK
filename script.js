@@ -415,18 +415,33 @@ banUserBtn.addEventListener('click', ()=>{
 
 
 
-// ===== Online players count =====
-const onlinePlayersEl = document.createElement('div');
-onlinePlayersEl.id = 'onlinePlayers';
-onlinePlayersEl.style.position = 'fixed';
-onlinePlayersEl.style.top = '10px';
-onlinePlayersEl.style.right = '10px';
-onlinePlayersEl.style.background = '#fff';
-onlinePlayersEl.style.padding = '5px';
-onlinePlayersEl.style.border = '1px solid #000';
-onlinePlayersEl.style.zIndex = '1000';
-document.body.appendChild(onlinePlayersEl);
+import { onDisconnect, set } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
 
+// Функция для отслеживания онлайн игроков
+function trackOnlinePlayer() {
+  if (!auth.currentUser) return;
+
+  const userId = auth.currentUser.uid;
+  const userRef = ref(rtdb, 'users/' + userId);
+
+  // Устанавливаем пользователя как онлайн
+  set(userRef, {
+    email: auth.currentUser.email,
+    lastSeen: Date.now()
+  });
+
+  // Удаляем при отключении
+  onDisconnect(userRef).remove();
+}
+
+// Вызываем при логине
+onAuthStateChanged(auth, user => {
+  if (user) {
+    trackOnlinePlayer();
+  }
+});
+
+// Обновляем счётчик онлайн игроков
 function updateOnlinePlayers() {
   const usersRef = ref(rtdb, 'users/');
   onValue(usersRef, snapshot => {
@@ -436,5 +451,4 @@ function updateOnlinePlayers() {
   });
 }
 
-// Запускаем функцию сразу и на любые изменения
 updateOnlinePlayers();
