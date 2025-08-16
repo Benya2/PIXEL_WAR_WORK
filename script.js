@@ -117,7 +117,7 @@ let markers = [];
 
 // ===== Tiles setup =====
 const TILE_SIZE = 1000;
-const SCALE_TILE = 2; // <<< во сколько раз увеличиваем тайлы
+const SCALE_TILE = 5; // <<< во сколько раз увеличиваем тайлы
 const tilesX = Math.ceil(worldWidth / TILE_SIZE);
 const tilesY = Math.ceil(worldHeight / TILE_SIZE);
 const tiles = [];
@@ -351,4 +351,5 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef=ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
