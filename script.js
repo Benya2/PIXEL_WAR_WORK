@@ -80,20 +80,11 @@ togglePalette.addEventListener("click", () => {
 
 // --- дальше идёт твой старый код без изменений (отрисовка, камера, база, админка и т.д.) ---
 
-
 // ===== World map background (как в pixelplanet — карта стран) =====
 // Положи рядом файл world.png (например 1200x600). Можно больше — всё равно зум/панорамирование.
 const worldMap = new Image();
 worldMap.src = 'world.png';
 worldMap.onload = () => renderAll();
-
-// ===== World size =====
-const WORLD_WIDTH = 20000;
-const WORLD_HEIGHT = 20000;
-
-const gridCellSize = 10;
-game.width = 1200;   // размер экрана
-game.height = 600;   // размер экрана
 
 // ===== Camera / Zoom / Pan =====
 let camX = 0;  // мировые координаты (px)
@@ -380,6 +371,7 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
 
