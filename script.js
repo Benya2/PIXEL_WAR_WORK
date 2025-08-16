@@ -81,9 +81,8 @@ togglePalette.addEventListener("click", () => {
 // ===== World map background (как в pixelplanet — карта стран) =====
 const worldMap = new Image();
 worldMap.src = 'world.png';
-const worldWidth = 20000;   // <-- сделано 20000
-const worldHeight = 20000;  // <-- сделано 20000
-worldMap.onload = () => renderAll();
+const worldWidth = 20000;
+const worldHeight = 20000;
 
 // ===== Camera / Zoom / Pan =====
 let camX = 0;
@@ -113,11 +112,33 @@ let hoverCellX = 0, hoverCellY = 0;
 const pixelsCache = new Map();
 let markers = [];
 
+// ===== Tiles setup =====
+const TILE_SIZE = 1000;
+const tilesX = Math.ceil(worldWidth / TILE_SIZE);
+const tilesY = Math.ceil(worldHeight / TILE_SIZE);
+const tiles = [];
+const offscreenCanvas = document.createElement('canvas');
+const offCtx = offscreenCanvas.getContext('2d');
+offscreenCanvas.width = TILE_SIZE;
+offscreenCanvas.height = TILE_SIZE;
+
+worldMap.onload = () => {
+  for (let tx = 0; tx < tilesX; tx++) {
+    for (let ty = 0; ty < tilesY; ty++) {
+      offCtx.clearRect(0,0,TILE_SIZE,TILE_SIZE);
+      offCtx.drawImage(worldMap, tx*TILE_SIZE, ty*TILE_SIZE, TILE_SIZE, TILE_SIZE, 0,0,TILE_SIZE,TILE_SIZE);
+      const img = new Image();
+      img.src = offscreenCanvas.toDataURL();
+      tiles.push({img, x: tx*TILE_SIZE, y: ty*TILE_SIZE});
+    }
+  }
+  renderAll();
+};
+
 // ===== Grid + Draw =====
 function renderAll() {
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,game.width,game.height);
-
   ctx.setTransform(scale, 0, 0, scale, -camX * scale, -camY * scale);
 
   const viewLeft = camX;
@@ -125,42 +146,35 @@ function renderAll() {
   const viewRight = camX + game.width / scale;
   const viewBottom = camY + game.height / scale;
 
-  // фон карта мира
-  if (worldMap.complete && worldMap.naturalWidth) {
-    ctx.drawImage(worldMap, 0, 0, worldWidth, worldHeight); // <-- изменено на 20000x20000
-  } else {
-    ctx.fillStyle = '#eef6ff';
-    ctx.fillRect(0,0,worldWidth,worldHeight); // <-- изменено на 20000x20000
-  }
-
-  ctx.beginPath();
-  ctx.strokeStyle = "#ccc";
-  let startX = Math.floor(viewLeft / gridCellSize) * gridCellSize;
-  for (let x = startX; x <= viewRight; x += gridCellSize) {
-    ctx.moveTo(x, viewTop);
-    ctx.lineTo(x, viewBottom);
-  }
-  let startY = Math.floor(viewTop / gridCellSize) * gridCellSize;
-  for (let y = startY; y <= viewBottom; y += gridCellSize) {
-    ctx.moveTo(viewLeft, y);
-    ctx.lineTo(viewRight, y);
-  }
-  ctx.stroke();
-
-  pixelsCache.forEach(d=>{
-    if (d.color !== "#FFFFFF") {
-      ctx.fillStyle = d.color;
-      ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
+  // draw tiles
+  tiles.forEach(tile => {
+    if (tile.x + TILE_SIZE < viewLeft || tile.x > viewRight || tile.y + TILE_SIZE < viewTop || tile.y > viewBottom) return;
+    if (tile.img.complete && tile.img.naturalWidth) ctx.drawImage(tile.img, tile.x, tile.y, TILE_SIZE, TILE_SIZE);
+    else {
+      ctx.fillStyle = '#eef6ff';
+      ctx.fillRect(tile.x, tile.y, TILE_SIZE, TILE_SIZE);
     }
   });
 
-  ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-  for (const [mx,my] of markers) {
-    ctx.fillRect(mx, my, gridCellSize, gridCellSize);
-  }
+  // сетка
+  ctx.beginPath();
+  ctx.strokeStyle = "#ccc";
+  let startX = Math.floor(viewLeft / gridCellSize) * gridCellSize;
+  for (let x = startX; x <= viewRight; x += gridCellSize) { ctx.moveTo(x, viewTop); ctx.lineTo(x, viewBottom); }
+  let startY = Math.floor(viewTop / gridCellSize) * gridCellSize;
+  for (let y = startY; y <= viewBottom; y += gridCellSize) { ctx.moveTo(viewLeft, y); ctx.lineTo(viewRight, y); }
+  ctx.stroke();
 
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(hoverCellX, hoverCellY, gridCellSize, gridCellSize);
+  // pixels
+  pixelsCache.forEach(d=>{ if(d.color!=="#FFFFFF"){ctx.fillStyle=d.color; ctx.fillRect(d.x,d.y,gridCellSize,gridCellSize);} });
+
+  // markers
+  ctx.fillStyle='rgba(255,0,0,0.5)';
+  for(const [mx,my] of markers) ctx.fillRect(mx,my,gridCellSize,gridCellSize);
+
+  // hover
+  ctx.fillStyle='rgba(0,0,0,0.12)';
+  ctx.fillRect(hoverCellX,hoverCellY,gridCellSize,gridCellSize);
 
   ctx.setTransform(1,0,0,1,0,0);
 }
@@ -168,187 +182,105 @@ function renderAll() {
 // ===== Firestore subscription =====
 onSnapshot(collection(db,"pixels"), snapshot=>{
   pixelsCache.clear();
-  snapshot.forEach(docSnap=>{
-    const d = docSnap.data();
-    pixelsCache.set(`${d.x}-${d.y}`, d);
-  });
+  snapshot.forEach(docSnap=>{const d=docSnap.data(); pixelsCache.set(`${d.x}-${d.y}`, d);});
   renderAll();
 });
 
-// ===== Mouse handling (hover, pan, zoom) =====
-game.addEventListener('mousedown', (e)=>{
-  if (e.button === 1 || e.button === 2 || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
-    isPanning = true; lastMouseX = e.clientX; lastMouseY = e.clientY;
-    e.preventDefault();
-  }
-});
-window.addEventListener('mouseup', ()=>{ isPanning = false; });
-game.addEventListener('contextmenu', (e)=> e.preventDefault());
-
-game.addEventListener('mousemove', (e)=>{
-  if (isPanning) {
-    const dx = e.clientX - lastMouseX;
-    const dy = e.clientY - lastMouseY;
-    camX -= dx / scale;
-    camY -= dy / scale;
-    lastMouseX = e.clientX; lastMouseY = e.clientY;
-    renderAll();
-  }
-  const [wx, wy] = screenToWorld(e.clientX, e.clientY);
-  [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
+// ===== Mouse handling =====
+game.addEventListener('mousedown', e=>{if(e.button===1||e.button===2||e.shiftKey||e.ctrlKey||e.metaKey||e.altKey){isPanning=true; lastMouseX=e.clientX; lastMouseY=e.clientY; e.preventDefault();}});
+window.addEventListener('mouseup', ()=>{isPanning=false;});
+game.addEventListener('contextmenu', e=>e.preventDefault());
+game.addEventListener('mousemove', e=>{
+  if(isPanning){const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY; camX-=dx/scale; camY-=dy/scale; lastMouseX=e.clientX; lastMouseY=e.clientY; renderAll();}
+  const [wx,wy]=screenToWorld(e.clientX,e.clientY);
+  [hoverCellX,hoverCellY]=snapToGrid(wx,wy);
   renderAll();
 });
-
-game.addEventListener('wheel', (e)=>{
+game.addEventListener('wheel', e=>{
   e.preventDefault();
-  const zoomFactor = 1.1;
-  const [beforeX, beforeY] = screenToWorld(e.clientX, e.clientY);
-  const dir = e.deltaY < 0 ? 1 : -1;
-  const newScale = clamp(scale * (dir > 0 ? zoomFactor : 1/zoomFactor), MIN_SCALE, MAX_SCALE);
-  if (newScale === scale) return;
-  scale = newScale;
-  const rect = game.getBoundingClientRect();
-  camX = beforeX - (e.clientX - rect.left)/scale;
-  camY = beforeY - (e.clientY - rect.top)/scale;
+  const zoomFactor=1.1;
+  const [beforeX,beforeY]=screenToWorld(e.clientX,e.clientY);
+  const dir=e.deltaY<0?1:-1;
+  const newScale=clamp(scale*(dir>0?zoomFactor:1/zoomFactor),MIN_SCALE,MAX_SCALE);
+  if(newScale===scale) return;
+  scale=newScale;
+  const rect=game.getBoundingClientRect();
+  camX=beforeX-(e.clientX-rect.left)/scale;
+  camY=beforeY-(e.clientY-rect.top)/scale;
   renderAll();
-}, { passive: false });
+},{passive:false});
 
 // ===== Drawing =====
 async function placePixelWithHover() {
   if(!auth.currentUser) return alert("Login to draw!");
   if(!canPlace) return;
-  canPlace = false;
-  const x = hoverCellX;
-  const y = hoverCellY;
-  const pixelRef = doc(db,"pixels",`${x}-${y}`);
-  try {
-    if (currentColor==="#FFFFFF") await deleteDoc(pixelRef);
-    else await setDoc(pixelRef,{x,y,color:currentColor});
-  } catch(err){ console.error(err); }
+  canPlace=false;
+  const x=hoverCellX, y=hoverCellY;
+  const pixelRef=doc(db,"pixels",`${x}-${y}`);
+  try{if(currentColor==="#FFFFFF") await deleteDoc(pixelRef); else await setDoc(pixelRef,{x,y,color:currentColor});}catch(err){console.error(err);}
   startReload();
 }
-
-game.addEventListener('click', (e)=>{
-  if (isPanning || e.button !== 0) return;
-  placePixelWithHover();
-});
-
-if (cursor) cursor.style.display = 'none';
+game.addEventListener('click', e=>{if(isPanning||e.button!==0) return; placePixelWithHover();});
+if(cursor) cursor.style.display='none';
 
 // ===== Cooldown =====
-function startReload(){
-  let t = reloadTime;
-  reloadTimerEl.innerText = `Reload: ${t} sec`;
-  const interval = setInterval(()=>{
-    t--;
-    if(t<=0){
-      clearInterval(interval);
-      canPlace = true;
-      reloadTimerEl.innerText = "Ready!";
-    } else reloadTimerEl.innerText = `Reload: ${t} sec`;
-  },1000);
-}
+function startReload(){let t=reloadTime; reloadTimerEl.innerText=`Reload: ${t} sec`; const interval=setInterval(()=>{t--; if(t<=0){clearInterval(interval); canPlace=true; reloadTimerEl.innerText="Ready!";} else reloadTimerEl.innerText=`Reload: ${t} sec`;},1000);}
 
 // ===== Auth button =====
-authButton.addEventListener('click', async () => {
-  if (auth.currentUser) {
-    await signOut(auth);
-    return;
-  }
-  const action = prompt("Enter 1 to sign in, or 2 to create a new account:");
-  if (!action || (action !== "1" && action !== "2")) return;
-
-  const email = prompt("Email:");
-  const pass = prompt("Password:");
-  if (!email || !pass) return;
-
-  try {
-    if (action === "1") {
-      await signInWithEmailAndPassword(auth, email, pass);
-      alert("Come in!");
-    } else {
-      await createUserWithEmailAndPassword(auth, email, pass);
-      alert("Account created!");
-    }
-  } catch (e) {
-    alert(e.message);
-  }
+authButton.addEventListener('click', async ()=>{
+  if(auth.currentUser){await signOut(auth); return;}
+  const action=prompt("Enter 1 to sign in, or 2 to create a new account:");
+  if(!action|| (action!=="1" && action!=="2")) return;
+  const email=prompt("Email:"), pass=prompt("Password:");
+  if(!email||!pass) return;
+  try{if(action==="1"){await signInWithEmailAndPassword(auth,email,pass); alert("Come in!");} else{await createUserWithEmailAndPassword(auth,email,pass); alert("Account created!");}}catch(e){alert(e.message);}
 });
 
-// ===== Auth state (admin panel) =====
-onAuthStateChanged(auth, user => {
-  if (user) {
-    authButton.textContent = "Log Out";
-    if (user.email === "logo100153@gmail.com") {
-      adminPanel.style.display = "block";
-    } else {
-      adminPanel.style.display = "none";
-    }
-  } else {
-    authButton.textContent = "Log In";
-    adminPanel.style.display = "none";
-  }
+// ===== Auth state =====
+onAuthStateChanged(auth,user=>{
+  if(user){authButton.textContent="Log Out"; adminPanel.style.display=(user.email==="logo100153@gmail.com")?"block":"none";}
+  else{authButton.textContent="Log In"; adminPanel.style.display="none";}
 });
 
-// ===== Admin: coords input + preview =====
-function parseCoords() {
-  markers = [];
-  const value = coordsInput.value.trim();
-  if (!value) { renderAll(); return; }
-
-  value.split(",").forEach(part => {
-    const [xCellStr, yCellStr, wCellStr, hCellStr] = part.trim().split(/\s+/);
-    const xCell = parseInt(xCellStr), yCell = parseInt(yCellStr);
-    const wCell = parseInt(wCellStr || '1'), hCell = parseInt(hCellStr || '1');
-    if (Number.isNaN(xCell) || Number.isNaN(yCell) || Number.isNaN(wCell) || Number.isNaN(hCell)) return;
-
-    const startX = xCell * gridCellSize;
-    const startY = yCell * gridCellSize;
-    for (let dx = 0; dx < wCell; dx++) {
-      for (let dy = 0; dy < hCell; dy++) {
-        const px = startX + dx * gridCellSize;
-        const py = startY + dy * gridCellSize;
-        if (px >= 0 && py >= 0 && px <= worldWidth - gridCellSize && py <= worldHeight - gridCellSize) { // <-- изменено
-          markers.push([px, py]);
-        }
-      }
-    }
+// ===== Admin coords input =====
+function parseCoords(){
+  markers=[];
+  const value=coordsInput.value.trim();
+  if(!value){renderAll(); return;}
+  value.split(",").forEach(part=>{
+    const [xCellStr,yCellStr,wCellStr,hCellStr]=part.trim().split(/\s+/);
+    const xCell=parseInt(xCellStr), yCell=parseInt(yCellStr);
+    const wCell=parseInt(wCellStr||'1'), hCell=parseInt(hCellStr||'1');
+    if(isNaN(xCell)||isNaN(yCell)||isNaN(wCell)||isNaN(hCell)) return;
+    const startX=xCell*gridCellSize, startY=yCell*gridCellSize;
+    for(let dx=0; dx<wCell; dx++){for(let dy=0; dy<hCell; dy++){
+      const px=startX+dx*gridCellSize, py=startY+dy*gridCellSize;
+      if(px>=0&&py>=0&&px<=worldWidth-gridCellSize&&py<=worldHeight-gridCellSize) markers.push([px,py]);
+    }}
   });
   renderAll();
 }
-
 coordsInput.addEventListener('input', parseCoords);
-
-async function adminApplyPixels(mode) {
-  if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
-    return alert("Только админ!");
-  }
+async function adminApplyPixels(mode){
+  if(!auth.currentUser || auth.currentUser.email!=="logo100153@gmail.com") return alert("Только админ!");
   parseCoords();
-  let count = 0;
-  for (const [x,y] of markers) {
-    const pixelRef = doc(db,"pixels",`${x}-${y}`);
-    if (mode === 'add') { await setDoc(pixelRef, {x,y,color:currentColor}); count++; }
-    else { await deleteDoc(pixelRef); count++; }
-  }
+  let count=0;
+  for(const [x,y] of markers){const pixelRef=doc(db,"pixels",`${x}-${y}`); if(mode==='add'){await setDoc(pixelRef,{x,y,color:currentColor}); count++;} else{await deleteDoc(pixelRef); count++;}}
   alert(`${mode==='add'?'Добавлено':'Удалено'} пикселей: ${count}`);
 }
-
 addPixelBtn.addEventListener('click', ()=>adminApplyPixels('add'));
 removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
 
 clearAllPixelsBtn.addEventListener('click', async ()=>{
   if(!auth.currentUser) return alert("Только админ!");
-  const snapshot = await getDocs(collection(db,"pixels"));
+  const snapshot=await getDocs(collection(db,"pixels"));
   snapshot.forEach(doc=>deleteDoc(doc.ref));
 });
 
 banUserBtn.addEventListener('click', ()=>{
   if(!auth.currentUser) return alert("Только админ!");
-  const userId = prompt("Введите UserID для бана:");
+  const userId=prompt("Введите UserID для бана:");
   if(!userId) return;
-  const userRef = ref(rtdb,'users/'+userId);
+  const userRef=ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
-
-
-
