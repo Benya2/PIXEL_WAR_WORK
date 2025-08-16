@@ -67,11 +67,14 @@ colors.forEach(c => {
 });
 
 // ===== Palette toggle =====
-paletteToggle.addEventListener("click", () => {
-  if (colorsChoiceEl.style.display === "flex") {
-    colorsChoiceEl.style.display = "none";
+const colorsChoice = document.getElementById("colorsChoice");
+const togglePalette = document.getElementById("togglePalette");
+
+togglePalette.addEventListener("click", () => {
+  if (colorsChoice.style.display === "none") {
+    colorsChoice.style.display = "grid";
   } else {
-    colorsChoiceEl.style.display = "flex";
+    colorsChoice.style.display = "none";
   }
 });
 
@@ -369,3 +372,4 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
