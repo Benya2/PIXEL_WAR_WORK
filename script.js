@@ -20,9 +20,10 @@ const auth = getAuth(app);
 
 // ===== DOM =====
 const colorsChoiceEl = document.getElementById('colorsChoice');
+const paletteToggle = document.getElementById('paletteToggle');
 const game = document.getElementById('game');
 const ctx = game.getContext('2d');
-const cursor = document.getElementById('cursor'); // больше не используется, оставим скрытым
+const cursor = document.getElementById('cursor');
 const reloadTimerEl = document.getElementById('reloadTimer');
 const adminPanel = document.getElementById('adminPanel');
 const clearAllPixelsBtn = document.getElementById('clearAllPixels');
@@ -41,18 +42,41 @@ let currentColor = "#000000";
 let canPlace = true;
 const reloadTime = 5;
 
-// ===== Colors =====
-const colors = ["#FFFFFF","#B39DDB","#9FA8DA","#90CAF9","#81D4FA","#80DEEA","#4DB6AC","#66BB6A","#9CCC65","#CDDC39","#FFEB3B","#FFC107","#FF9800","#FF5722","#A1887F","#E0E0E0","#000000"];
-colors.forEach(c=>{
-  const div = document.createElement('div');
+// ===== Colors (30 как в PixelPlanet) =====
+const colors = [
+  "rgb(255, 255, 255)", "rgb(228, 228, 228)", "rgb(196, 196, 196)", "rgb(136, 136, 136)",
+  "rgb(78, 78, 78)", "rgb(0, 0, 0)", "rgb(244, 179, 174)", "rgb(255, 167, 209)",
+  "rgb(255, 84, 178)", "rgb(255, 101, 101)", "rgb(229, 0, 0)", "rgb(154, 0, 0)",
+  "rgb(254, 164, 96)", "rgb(229, 149, 0)", "rgb(160, 106, 66)", "rgb(96, 64, 40)",
+  "rgb(245, 223, 176)", "rgb(255, 248, 137)", "rgb(229, 217, 0)", "rgb(148, 224, 68)",
+  "rgb(2, 190, 1)", "rgb(104, 131, 56)", "rgb(0, 101, 19)", "rgb(202, 227, 255)",
+  "rgb(0, 211, 221)", "rgb(0, 131, 199)", "rgb(0, 0, 234)", "rgb(25, 25, 115)",
+  "rgb(207, 110, 228)", "rgb(130, 0, 128)"
+];
+
+colorsChoiceEl.innerHTML = "";
+colors.forEach(c => {
+  const div = document.createElement("div");
   div.style.backgroundColor = c;
-  div.addEventListener('click', ()=>{
+  div.addEventListener("click", () => {
     currentColor = c;
-    document.querySelectorAll('#colorsChoice div').forEach(el=>el.classList.remove('selected'));
-    div.classList.add('selected');
+    document.querySelectorAll("#colorsChoice div").forEach(el => el.classList.remove("selected"));
+    div.classList.add("selected");
   });
   colorsChoiceEl.appendChild(div);
 });
+
+// ===== Palette toggle =====
+paletteToggle.addEventListener("click", () => {
+  if (colorsChoiceEl.style.display === "flex") {
+    colorsChoiceEl.style.display = "none";
+  } else {
+    colorsChoiceEl.style.display = "flex";
+  }
+});
+
+// --- дальше идёт твой старый код без изменений (отрисовка, камера, база, админка и т.д.) ---
+
 
 // ===== World map background (как в pixelplanet — карта стран) =====
 // Положи рядом файл world.png (например 1200x600). Можно больше — всё равно зум/панорамирование.
