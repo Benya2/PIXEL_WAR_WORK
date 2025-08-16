@@ -87,6 +87,14 @@ const worldMap = new Image();
 worldMap.src = 'world.png';
 worldMap.onload = () => renderAll();
 
+// ===== World size =====
+const WORLD_WIDTH = 20000;
+const WORLD_HEIGHT = 20000;
+
+const gridCellSize = 10;
+game.width = 1200;   // размер экрана
+game.height = 600;   // размер экрана
+
 // ===== Camera / Zoom / Pan =====
 let camX = 0;  // мировые координаты (px)
 let camY = 0;
@@ -372,6 +380,7 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
 
