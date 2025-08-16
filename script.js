@@ -414,17 +414,27 @@ banUserBtn.addEventListener('click', ()=>{
 });
 
 
+
 // ===== Online players count =====
-const onlinePlayersEl = document.getElementById('onlinePlayers');
+const onlinePlayersEl = document.createElement('div');
+onlinePlayersEl.id = 'onlinePlayers';
+onlinePlayersEl.style.position = 'fixed';
+onlinePlayersEl.style.top = '10px';
+onlinePlayersEl.style.right = '10px';
+onlinePlayersEl.style.background = '#fff';
+onlinePlayersEl.style.padding = '5px';
+onlinePlayersEl.style.border = '1px solid #000';
+onlinePlayersEl.style.zIndex = '1000';
+document.body.appendChild(onlinePlayersEl);
 
 function updateOnlinePlayers() {
   const usersRef = ref(rtdb, 'users/');
   onValue(usersRef, snapshot => {
     const data = snapshot.val();
     const count = data ? Object.keys(data).length : 0;
-    if (onlinePlayersEl) onlinePlayersEl.innerText = `Online players: ${count}`;
+    onlinePlayersEl.innerText = `Online players: ${count}`;
   });
 }
 
-// Обновляем сразу и на любые изменения
+// Запускаем функцию сразу и на любые изменения
 updateOnlinePlayers();
