@@ -44,7 +44,7 @@ const reloadTime = 5;
 
 // ===== Colors (30 как в PixelPlanet) =====
 const colors = [
-  "rgb(255, 255, 255)", "rgb(228, 228, 228)", "rgb(196, 196, 196)", "rgb(136, 136, 136)",
+  "rgb(255, 255, 255)", "rgb(96, 64, 40)", "rgb(196, 196, 196)", "rgb(136, 136, 136)",
   "rgb(78, 78, 78)", "rgb(0, 0, 0)", "rgb(244, 179, 174)", "rgb(255, 167, 209)",
   "rgb(255, 84, 178)", "rgb(255, 101, 101)", "rgb(229, 0, 0)", "rgb(154, 0, 0)",
   "rgb(254, 164, 96)", "rgb(229, 149, 0)", "rgb(160, 106, 66)", "rgb(96, 64, 40)",
@@ -372,4 +372,5 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
