@@ -72,6 +72,18 @@ h1 {
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
+#chat {
+  position: fixed;
+  right: 20px;
+  bottom: 0px; /* чуть ниже палитры */
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
 #reloadTimer {
   position: fixed;
   bottom: 10px;
@@ -115,6 +127,7 @@ h1 {
 #colorsChoice::-webkit-scrollbar-track {
   background: transparent;
 }
+
 
 
 
