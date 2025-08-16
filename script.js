@@ -86,7 +86,7 @@ const worldMap = new Image();
 worldMap.src = 'world.png';
 
 // Итоговый "мировой" размер для рендера (масштабированный)
-const SCALE_TILE = 20; // увеличение карты (поменяй 2/3/4 ...)
+const SCALE_TILE = 40; // увеличение карты (поменяй 2/3/4 ...)
 let WORLD_W = 20000 * SCALE_TILE;
 let WORLD_H = 20000 * SCALE_TILE;
 
@@ -95,7 +95,7 @@ let camX = 0;
 let camY = 0;
 let scale = 1;
 const MIN_SCALE = 0.25;
-const MAX_SCALE = 6;
+const MAX_SCALE = 600;
 
 let isPanning = false;
 let lastMouseX = 0, lastMouseY = 0;
@@ -412,6 +412,7 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
 
