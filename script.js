@@ -33,6 +33,9 @@ const coordsInput = document.getElementById('coordsInput');
 const addPixelBtn = document.getElementById('addPixelBtn');
 const removePixelBtn = document.getElementById('removePixelBtn');
 
+// отключаем сглаживание (чтобы не было мыла)
+ctx.imageSmoothingEnabled = false;
+
 const gridCellSize = 10;
 game.width = 1200;
 game.height = 600;
@@ -112,24 +115,34 @@ let hoverCellX = 0, hoverCellY = 0;
 const pixelsCache = new Map();
 let markers = [];
 
-// ===== Tiles setup =====
-const TILE_SIZE = 1000;
+// ===== Tiles setup (генерация тайлов из большой карты) =====
+const TILE_SIZE = 1000; // 1000x1000 => 20x20 тайлов = 400 штук
 const tilesX = Math.ceil(worldWidth / TILE_SIZE);
 const tilesY = Math.ceil(worldHeight / TILE_SIZE);
 const tiles = [];
 const offscreenCanvas = document.createElement('canvas');
-const offCtx = offscreenCanvas.getContext('2d');
+const offCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
 offscreenCanvas.width = TILE_SIZE;
 offscreenCanvas.height = TILE_SIZE;
+// отключаем сглаживание для тайлов
+offCtx.imageSmoothingEnabled = false;
 
 worldMap.onload = () => {
+  // режем большую карту на тайлы 1000x1000 и кэшируем их как Image
   for (let tx = 0; tx < tilesX; tx++) {
     for (let ty = 0; ty < tilesY; ty++) {
-      offCtx.clearRect(0,0,TILE_SIZE,TILE_SIZE);
-      offCtx.drawImage(worldMap, tx*TILE_SIZE, ty*TILE_SIZE, TILE_SIZE, TILE_SIZE, 0,0,TILE_SIZE,TILE_SIZE);
+      const sx = tx * TILE_SIZE;
+      const sy = ty * TILE_SIZE;
+      const sw = Math.min(TILE_SIZE, worldWidth - sx);
+      const sh = Math.min(TILE_SIZE, worldHeight - sy);
+
+      offCtx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+      // рисуем часть worldMap без масштабирования (чётко, без мыла)
+      offCtx.drawImage(worldMap, sx, sy, sw, sh, 0, 0, sw, sh);
+
       const img = new Image();
-      img.src = offscreenCanvas.toDataURL();
-      tiles.push({img, x: tx*TILE_SIZE, y: ty*TILE_SIZE});
+      img.src = offscreenCanvas.toDataURL("image/png");
+      tiles.push({ img, x: sx, y: sy, w: sw, h: sh });
     }
   }
   renderAll();
@@ -137,6 +150,9 @@ worldMap.onload = () => {
 
 // ===== Grid + Draw =====
 function renderAll() {
+  // всегда без сглаживания
+  ctx.imageSmoothingEnabled = false;
+
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,game.width,game.height);
   ctx.setTransform(scale, 0, 0, scale, -camX * scale, -camY * scale);
@@ -146,15 +162,16 @@ function renderAll() {
   const viewRight = camX + game.width / scale;
   const viewBottom = camY + game.height / scale;
 
-  // draw tiles
-  tiles.forEach(tile => {
-    if (tile.x + TILE_SIZE < viewLeft || tile.x > viewRight || tile.y + TILE_SIZE < viewTop || tile.y > viewBottom) return;
-    if (tile.img.complete && tile.img.naturalWidth) ctx.drawImage(tile.img, tile.x, tile.y, TILE_SIZE, TILE_SIZE);
-    else {
+  // draw tiles только в видимой области
+  for (const tile of tiles) {
+    if (tile.x + tile.w < viewLeft || tile.x > viewRight || tile.y + tile.h < viewTop || tile.y > viewBottom) continue;
+    if (tile.img.complete && tile.img.naturalWidth) {
+      ctx.drawImage(tile.img, tile.x, tile.y, tile.w, tile.h);
+    } else {
       ctx.fillStyle = '#eef6ff';
-      ctx.fillRect(tile.x, tile.y, TILE_SIZE, TILE_SIZE);
+      ctx.fillRect(tile.x, tile.y, tile.w, tile.h);
     }
-  });
+  }
 
   // сетка
   ctx.beginPath();
@@ -166,7 +183,12 @@ function renderAll() {
   ctx.stroke();
 
   // pixels
-  pixelsCache.forEach(d=>{ if(d.color!=="#FFFFFF"){ctx.fillStyle=d.color; ctx.fillRect(d.x,d.y,gridCellSize,gridCellSize);} });
+  pixelsCache.forEach(d => {
+    if (d.color !== "#FFFFFF") {
+      ctx.fillStyle = d.color;
+      ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
+    }
+  });
 
   // markers
   ctx.fillStyle='rgba(255,0,0,0.5)';
@@ -187,11 +209,18 @@ onSnapshot(collection(db,"pixels"), snapshot=>{
 });
 
 // ===== Mouse handling =====
-game.addEventListener('mousedown', e=>{if(e.button===1||e.button===2||e.shiftKey||e.ctrlKey||e.metaKey||e.altKey){isPanning=true; lastMouseX=e.clientX; lastMouseY=e.clientY; e.preventDefault();}});
+game.addEventListener('mousedown', e=>{
+  if(e.button===1||e.button===2||e.shiftKey||e.ctrlKey||e.metaKey||e.altKey){
+    isPanning=true; lastMouseX=e.clientX; lastMouseY=e.clientY; e.preventDefault();
+  }
+});
 window.addEventListener('mouseup', ()=>{isPanning=false;});
 game.addEventListener('contextmenu', e=>e.preventDefault());
 game.addEventListener('mousemove', e=>{
-  if(isPanning){const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY; camX-=dx/scale; camY-=dy/scale; lastMouseX=e.clientX; lastMouseY=e.clientY; renderAll();}
+  if(isPanning){
+    const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY;
+    camX-=dx/scale; camY-=dy/scale; lastMouseX=e.clientX; lastMouseY=e.clientY; renderAll();
+  }
   const [wx,wy]=screenToWorld(e.clientX,e.clientY);
   [hoverCellX,hoverCellY]=snapToGrid(wx,wy);
   renderAll();
@@ -217,14 +246,28 @@ async function placePixelWithHover() {
   canPlace=false;
   const x=hoverCellX, y=hoverCellY;
   const pixelRef=doc(db,"pixels",`${x}-${y}`);
-  try{if(currentColor==="#FFFFFF") await deleteDoc(pixelRef); else await setDoc(pixelRef,{x,y,color:currentColor});}catch(err){console.error(err);}
+  try{
+    if(currentColor==="#FFFFFF") await deleteDoc(pixelRef);
+    else await setDoc(pixelRef,{x,y,color:currentColor});
+  }catch(err){console.error(err);}
   startReload();
 }
 game.addEventListener('click', e=>{if(isPanning||e.button!==0) return; placePixelWithHover();});
 if(cursor) cursor.style.display='none';
 
 // ===== Cooldown =====
-function startReload(){let t=reloadTime; reloadTimerEl.innerText=`Reload: ${t} sec`; const interval=setInterval(()=>{t--; if(t<=0){clearInterval(interval); canPlace=true; reloadTimerEl.innerText="Ready!";} else reloadTimerEl.innerText=`Reload: ${t} sec`;},1000);}
+function startReload(){
+  let t=reloadTime;
+  reloadTimerEl.innerText=`Reload: ${t} sec`;
+  const interval=setInterval(()=>{
+    t--;
+    if(t<=0){
+      clearInterval(interval);
+      canPlace=true;
+      reloadTimerEl.innerText="Ready!";
+    } else reloadTimerEl.innerText=`Reload: ${t} sec`;
+  },1000);
+}
 
 // ===== Auth button =====
 authButton.addEventListener('click', async ()=>{
@@ -233,16 +276,30 @@ authButton.addEventListener('click', async ()=>{
   if(!action|| (action!=="1" && action!=="2")) return;
   const email=prompt("Email:"), pass=prompt("Password:");
   if(!email||!pass) return;
-  try{if(action==="1"){await signInWithEmailAndPassword(auth,email,pass); alert("Come in!");} else{await createUserWithEmailAndPassword(auth,email,pass); alert("Account created!");}}catch(e){alert(e.message);}
+  try{
+    if(action==="1"){
+      await signInWithEmailAndPassword(auth,email,pass);
+      alert("Come in!");
+    } else{
+      await createUserWithEmailAndPassword(auth,email,pass);
+      alert("Account created!");
+    }
+  }catch(e){alert(e.message);}
 });
 
 // ===== Auth state =====
 onAuthStateChanged(auth,user=>{
-  if(user){authButton.textContent="Log Out"; adminPanel.style.display=(user.email==="logo100153@gmail.com")?"block":"none";}
-  else{authButton.textContent="Log In"; adminPanel.style.display="none";}
+  if(user){
+    authButton.textContent="Log Out";
+    adminPanel.style.display=(user.email==="logo100153@gmail.com")?"block":"none";
+  }
+  else{
+    authButton.textContent="Log In";
+    adminPanel.style.display="none";
+  }
 });
 
-// ===== Admin coords input =====
+// ===== Admin: coords input + preview =====
 function parseCoords(){
   markers=[];
   const value=coordsInput.value.trim();
@@ -253,19 +310,26 @@ function parseCoords(){
     const wCell=parseInt(wCellStr||'1'), hCell=parseInt(hCellStr||'1');
     if(isNaN(xCell)||isNaN(yCell)||isNaN(wCell)||isNaN(hCell)) return;
     const startX=xCell*gridCellSize, startY=yCell*gridCellSize;
-    for(let dx=0; dx<wCell; dx++){for(let dy=0; dy<hCell; dy++){
-      const px=startX+dx*gridCellSize, py=startY+dy*gridCellSize;
-      if(px>=0&&py>=0&&px<=worldWidth-gridCellSize&&py<=worldHeight-gridCellSize) markers.push([px,py]);
-    }}
+    for(let dx=0; dx<wCell; dx++){
+      for(let dy=0; dy<hCell; dy++){
+        const px=startX+dx*gridCellSize, py=startY+dy*gridCellSize;
+        if(px>=0&&py>=0&&px<=worldWidth-gridCellSize&&py<=worldHeight-gridCellSize) markers.push([px,py]);
+      }
+    }
   });
   renderAll();
 }
 coordsInput.addEventListener('input', parseCoords);
+
 async function adminApplyPixels(mode){
   if(!auth.currentUser || auth.currentUser.email!=="logo100153@gmail.com") return alert("Только админ!");
   parseCoords();
   let count=0;
-  for(const [x,y] of markers){const pixelRef=doc(db,"pixels",`${x}-${y}`); if(mode==='add'){await setDoc(pixelRef,{x,y,color:currentColor}); count++;} else{await deleteDoc(pixelRef); count++;}}
+  for(const [x,y] of markers){
+    const pixelRef=doc(db,"pixels",`${x}-${y}`);
+    if(mode==='add'){await setDoc(pixelRef,{x,y,color:currentColor}); count++;}
+    else{await deleteDoc(pixelRef); count++;}
+  }
   alert(`${mode==='add'?'Добавлено':'Удалено'} пикселей: ${count}`);
 }
 addPixelBtn.addEventListener('click', ()=>adminApplyPixels('add'));
