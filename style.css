@@ -34,54 +34,42 @@ h1 {
 /* Палитра */
 #colorsChoice {
   position: fixed;
-  right: 15px;
-  bottom: 50px; /* переносим вниз */
+  right: 20px;
+  bottom: 20px;
   display: grid;
-  grid-template-columns: repeat(2, 22px); /* две колонки */
+  grid-template-columns: repeat(2, 30px); /* Две колонки */
   gap: 6px;
-  padding: 6px;
   background: #fff;
+  padding: 10px;
   border: 1px solid #ccc;
-  border-radius: 6px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.15);
-  max-height: 200px;
-  overflow-y: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  max-height: none; /* убираем ограничение, чтоб всё видно */
 }
 
 #colorsChoice div {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
   cursor: pointer;
-  border: 1px solid #999;
-  border-radius: 2px;
-  transition: transform 0.1s;
-}
-
-#colorsChoice div:hover {
-  transform: scale(1.15);
+  border: 1px solid #aaa;
+  box-sizing: border-box;
 }
 
 #colorsChoice div.selected {
-  border: 2px solid #000;
+  border: 2px solid black;
 }
 
-/* Кнопка открытия/закрытия палитры */
-#togglePalette {
+#paletteToggle {
   position: fixed;
-  right: 15px;
-  bottom: 15px;
-  width: 35px;
-  height: 35px;
+  right: 20px;
+  bottom: 120px; /* чуть выше палитры */
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.15);
+  padding: 5px 10px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  user-select: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
 #reloadTimer {
@@ -127,3 +115,4 @@ h1 {
 #colorsChoice::-webkit-scrollbar-track {
   background: transparent;
 }
+
