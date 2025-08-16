@@ -45,7 +45,7 @@ let currentColor = "#000000";
 let canPlace = true;
 const reloadTime = 5;
 
-// ===== Colors (30 как в PixelPlanet) =====
+// ===== Colors =====
 const colors = [
   "rgb(255, 255, 255)", "rgb(96, 64, 40)", "rgb(228, 228, 228)", "rgb(245, 223, 176)",
   "rgb(196, 196, 196)", "rgb(255, 248, 137)", "rgb(136, 136, 136)", "rgb(229, 217, 0)",
@@ -81,7 +81,7 @@ togglePalette.addEventListener("click", () => {
   }
 });
 
-// ===== World map background (как в pixelplanet — карта стран) =====
+// ===== World map background =====
 const worldMap = new Image();
 worldMap.src = 'world.png';
 const worldWidth = 20000;
@@ -115,8 +115,9 @@ let hoverCellX = 0, hoverCellY = 0;
 const pixelsCache = new Map();
 let markers = [];
 
-// ===== Tiles setup (генерация тайлов из большой карты) =====
-const TILE_SIZE = 1000; // 1000x1000 => 20x20 тайлов = 400 штук
+// ===== Tiles setup =====
+const TILE_SIZE = 1000;
+const SCALE_TILE = 2; // <<< во сколько раз увеличиваем тайлы
 const tilesX = Math.ceil(worldWidth / TILE_SIZE);
 const tilesY = Math.ceil(worldHeight / TILE_SIZE);
 const tiles = [];
@@ -124,11 +125,9 @@ const offscreenCanvas = document.createElement('canvas');
 const offCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
 offscreenCanvas.width = TILE_SIZE;
 offscreenCanvas.height = TILE_SIZE;
-// отключаем сглаживание для тайлов
 offCtx.imageSmoothingEnabled = false;
 
 worldMap.onload = () => {
-  // режем большую карту на тайлы 1000x1000 и кэшируем их как Image
   for (let tx = 0; tx < tilesX; tx++) {
     for (let ty = 0; ty < tilesY; ty++) {
       const sx = tx * TILE_SIZE;
@@ -137,7 +136,6 @@ worldMap.onload = () => {
       const sh = Math.min(TILE_SIZE, worldHeight - sy);
 
       offCtx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
-      // рисуем часть worldMap без масштабирования (чётко, без мыла)
       offCtx.drawImage(worldMap, sx, sy, sw, sh, 0, 0, sw, sh);
 
       const img = new Image();
@@ -150,7 +148,6 @@ worldMap.onload = () => {
 
 // ===== Grid + Draw =====
 function renderAll() {
-  // всегда без сглаживания
   ctx.imageSmoothingEnabled = false;
 
   ctx.setTransform(1,0,0,1,0,0);
@@ -162,14 +159,18 @@ function renderAll() {
   const viewRight = camX + game.width / scale;
   const viewBottom = camY + game.height / scale;
 
-  // draw tiles только в видимой области
+  // draw tiles
   for (const tile of tiles) {
     if (tile.x + tile.w < viewLeft || tile.x > viewRight || tile.y + tile.h < viewTop || tile.y > viewBottom) continue;
     if (tile.img.complete && tile.img.naturalWidth) {
-      ctx.drawImage(tile.img, tile.x, tile.y, tile.w, tile.h);
+      ctx.drawImage(
+        tile.img, 
+        tile.x, tile.y, tile.w, tile.h,
+        tile.x, tile.y, tile.w * SCALE_TILE, tile.h * SCALE_TILE
+      );
     } else {
       ctx.fillStyle = '#eef6ff';
-      ctx.fillRect(tile.x, tile.y, tile.w, tile.h);
+      ctx.fillRect(tile.x, tile.y, tile.w * SCALE_TILE, tile.h * SCALE_TILE);
     }
   }
 
@@ -200,6 +201,8 @@ function renderAll() {
 
   ctx.setTransform(1,0,0,1,0,0);
 }
+
+// ... (остальной код без изменений, Firestore, mouse, auth и т.д.)
 
 // ===== Firestore subscription =====
 onSnapshot(collection(db,"pixels"), snapshot=>{
@@ -348,3 +351,4 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef=ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
