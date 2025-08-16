@@ -33,7 +33,7 @@ const coordsInput = document.getElementById('coordsInput');
 const addPixelBtn = document.getElementById('addPixelBtn');
 const removePixelBtn = document.getElementById('removePixelBtn');
 
-// отключаем сглаживание (чтобы не было мыла)
+// без сглаживания
 ctx.imageSmoothingEnabled = false;
 
 const gridCellSize = 10;
@@ -45,7 +45,7 @@ let currentColor = "#000000";
 let canPlace = true;
 const reloadTime = 5;
 
-// ===== Colors =====
+// ===== Colors (30 как в PixelPlanet) =====
 const colors = [
   "rgb(255, 255, 255)", "rgb(96, 64, 40)", "rgb(228, 228, 228)", "rgb(245, 223, 176)",
   "rgb(196, 196, 196)", "rgb(255, 248, 137)", "rgb(136, 136, 136)", "rgb(229, 217, 0)",
@@ -84,8 +84,11 @@ togglePalette.addEventListener("click", () => {
 // ===== World map background =====
 const worldMap = new Image();
 worldMap.src = 'world.png';
-const worldWidth = 20000;
-const worldHeight = 20000;
+
+// Итоговый "мировой" размер для рендера (масштабированный)
+const SCALE_TILE = 3; // увеличение карты (поменяй 2/3/4 ...)
+let WORLD_W = 20000 * SCALE_TILE;
+let WORLD_H = 20000 * SCALE_TILE;
 
 // ===== Camera / Zoom / Pan =====
 let camX = 0;
@@ -115,32 +118,49 @@ let hoverCellX = 0, hoverCellY = 0;
 const pixelsCache = new Map();
 let markers = [];
 
-// ===== Tiles setup =====
+// ===== Tiles setup (режем большую карту на тайлы) =====
 const TILE_SIZE = 1000;
-const SCALE_TILE = 5; // <<< во сколько раз увеличиваем тайлы
-const tilesX = Math.ceil(worldWidth / TILE_SIZE);
-const tilesY = Math.ceil(worldHeight / TILE_SIZE);
-const tiles = [];
+let tiles = [];
+
 const offscreenCanvas = document.createElement('canvas');
-const offCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
 offscreenCanvas.width = TILE_SIZE;
 offscreenCanvas.height = TILE_SIZE;
+const offCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
 offCtx.imageSmoothingEnabled = false;
 
 worldMap.onload = () => {
+  // реальные размеры исходной картинки
+  const imgW = worldMap.naturalWidth || 20000;
+  const imgH = worldMap.naturalHeight || 20000;
+
+  // итоговые размеры мира (после увеличения)
+  WORLD_W = imgW * SCALE_TILE;
+  WORLD_H = imgH * SCALE_TILE;
+
+  const tilesX = Math.ceil(imgW / TILE_SIZE);
+  const tilesY = Math.ceil(imgH / TILE_SIZE);
+
+  tiles = [];
   for (let tx = 0; tx < tilesX; tx++) {
     for (let ty = 0; ty < tilesY; ty++) {
       const sx = tx * TILE_SIZE;
       const sy = ty * TILE_SIZE;
-      const sw = Math.min(TILE_SIZE, worldWidth - sx);
-      const sh = Math.min(TILE_SIZE, worldHeight - sy);
+      const sw = Math.min(TILE_SIZE, imgW - sx);
+      const sh = Math.min(TILE_SIZE, imgH - sy);
 
       offCtx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
       offCtx.drawImage(worldMap, sx, sy, sw, sh, 0, 0, sw, sh);
 
       const img = new Image();
       img.src = offscreenCanvas.toDataURL("image/png");
-      tiles.push({ img, x: sx, y: sy, w: sw, h: sh });
+
+      // координаты назначения с учётом увеличения
+      const dx = sx * SCALE_TILE;
+      const dy = sy * SCALE_TILE;
+      const dw = sw * SCALE_TILE;
+      const dh = sh * SCALE_TILE;
+
+      tiles.push({ img, dx, dy, dw, dh });
     }
   }
   renderAll();
@@ -159,18 +179,14 @@ function renderAll() {
   const viewRight = camX + game.width / scale;
   const viewBottom = camY + game.height / scale;
 
-  // draw tiles
-  for (const tile of tiles) {
-    if (tile.x + tile.w < viewLeft || tile.x > viewRight || tile.y + tile.h < viewTop || tile.y > viewBottom) continue;
-    if (tile.img.complete && tile.img.naturalWidth) {
-      ctx.drawImage(
-        tile.img, 
-        tile.x, tile.y, tile.w, tile.h,
-        tile.x, tile.y, tile.w * SCALE_TILE, tile.h * SCALE_TILE
-      );
+  // тайлы (только видимые)
+  for (const t of tiles) {
+    if (t.dx + t.dw < viewLeft || t.dx > viewRight || t.dy + t.dh < viewTop || t.dy > viewBottom) continue;
+    if (t.img.complete && t.img.naturalWidth) {
+      ctx.drawImage(t.img, t.dx, t.dy, t.dw, t.dh);
     } else {
       ctx.fillStyle = '#eef6ff';
-      ctx.fillRect(tile.x, tile.y, tile.w * SCALE_TILE, tile.h * SCALE_TILE);
+      ctx.fillRect(t.dx, t.dy, t.dw, t.dh);
     }
   }
 
@@ -178,178 +194,221 @@ function renderAll() {
   ctx.beginPath();
   ctx.strokeStyle = "#ccc";
   let startX = Math.floor(viewLeft / gridCellSize) * gridCellSize;
-  for (let x = startX; x <= viewRight; x += gridCellSize) { ctx.moveTo(x, viewTop); ctx.lineTo(x, viewBottom); }
+  for (let x = startX; x <= viewRight; x += gridCellSize) {
+    ctx.moveTo(x, viewTop);
+    ctx.lineTo(x, viewBottom);
+  }
   let startY = Math.floor(viewTop / gridCellSize) * gridCellSize;
-  for (let y = startY; y <= viewBottom; y += gridCellSize) { ctx.moveTo(viewLeft, y); ctx.lineTo(viewRight, y); }
+  for (let y = startY; y <= viewBottom; y += gridCellSize) {
+    ctx.moveTo(viewLeft, y);
+    ctx.lineTo(viewRight, y);
+  }
   ctx.stroke();
 
-  // pixels
-  pixelsCache.forEach(d => {
+  // пиксели
+  pixelsCache.forEach(d=>{
     if (d.color !== "#FFFFFF") {
       ctx.fillStyle = d.color;
       ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
     }
   });
 
-  // markers
+  // маркеры
   ctx.fillStyle='rgba(255,0,0,0.5)';
-  for(const [mx,my] of markers) ctx.fillRect(mx,my,gridCellSize,gridCellSize);
+  for (const [mx,my] of markers) {
+    ctx.fillRect(mx, my, gridCellSize, gridCellSize);
+  }
 
   // hover
   ctx.fillStyle='rgba(0,0,0,0.12)';
-  ctx.fillRect(hoverCellX,hoverCellY,gridCellSize,gridCellSize);
+  ctx.fillRect(hoverCellX, hoverCellY, gridCellSize, gridCellSize);
 
   ctx.setTransform(1,0,0,1,0,0);
 }
 
-// ... (остальной код без изменений, Firestore, mouse, auth и т.д.)
-
 // ===== Firestore subscription =====
 onSnapshot(collection(db,"pixels"), snapshot=>{
   pixelsCache.clear();
-  snapshot.forEach(docSnap=>{const d=docSnap.data(); pixelsCache.set(`${d.x}-${d.y}`, d);});
+  snapshot.forEach(docSnap=>{
+    const d = docSnap.data();
+    pixelsCache.set(`${d.x}-${d.y}`, d);
+  });
   renderAll();
 });
 
 // ===== Mouse handling =====
-game.addEventListener('mousedown', e=>{
-  if(e.button===1||e.button===2||e.shiftKey||e.ctrlKey||e.metaKey||e.altKey){
-    isPanning=true; lastMouseX=e.clientX; lastMouseY=e.clientY; e.preventDefault();
+game.addEventListener('mousedown', (e)=>{
+  if (e.button === 1 || e.button === 2 || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
+    isPanning = true; lastMouseX = e.clientX; lastMouseY = e.clientY;
+    e.preventDefault();
   }
 });
-window.addEventListener('mouseup', ()=>{isPanning=false;});
-game.addEventListener('contextmenu', e=>e.preventDefault());
-game.addEventListener('mousemove', e=>{
-  if(isPanning){
-    const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY;
-    camX-=dx/scale; camY-=dy/scale; lastMouseX=e.clientX; lastMouseY=e.clientY; renderAll();
+window.addEventListener('mouseup', ()=>{ isPanning = false; });
+game.addEventListener('contextmenu', (e)=> e.preventDefault());
+
+game.addEventListener('mousemove', (e)=>{
+  if (isPanning) {
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+    camX -= dx / scale;
+    camY -= dy / scale;
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    renderAll();
   }
-  const [wx,wy]=screenToWorld(e.clientX,e.clientY);
-  [hoverCellX,hoverCellY]=snapToGrid(wx,wy);
+  const [wx, wy] = screenToWorld(e.clientX, e.clientY);
+  [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
   renderAll();
 });
-game.addEventListener('wheel', e=>{
+
+game.addEventListener('wheel', (e)=>{
   e.preventDefault();
-  const zoomFactor=1.1;
-  const [beforeX,beforeY]=screenToWorld(e.clientX,e.clientY);
-  const dir=e.deltaY<0?1:-1;
-  const newScale=clamp(scale*(dir>0?zoomFactor:1/zoomFactor),MIN_SCALE,MAX_SCALE);
-  if(newScale===scale) return;
-  scale=newScale;
-  const rect=game.getBoundingClientRect();
-  camX=beforeX-(e.clientX-rect.left)/scale;
-  camY=beforeY-(e.clientY-rect.top)/scale;
+  const zoomFactor = 1.1;
+  const [beforeX, beforeY] = screenToWorld(e.clientX, e.clientY);
+  const dir = e.deltaY < 0 ? 1 : -1;
+  const newScale = clamp(scale * (dir > 0 ? zoomFactor : 1/zoomFactor), MIN_SCALE, MAX_SCALE);
+  if (newScale === scale) return;
+  scale = newScale;
+  const rect = game.getBoundingClientRect();
+  camX = beforeX - (e.clientX - rect.left)/scale;
+  camY = beforeY - (e.clientY - rect.top)/scale;
   renderAll();
-},{passive:false});
+}, { passive: false });
 
 // ===== Drawing =====
 async function placePixelWithHover() {
   if(!auth.currentUser) return alert("Login to draw!");
   if(!canPlace) return;
-  canPlace=false;
-  const x=hoverCellX, y=hoverCellY;
-  const pixelRef=doc(db,"pixels",`${x}-${y}`);
-  try{
-    if(currentColor==="#FFFFFF") await deleteDoc(pixelRef);
+  canPlace = false;
+  const x = hoverCellX;
+  const y = hoverCellY;
+  const pixelRef = doc(db,"pixels",`${x}-${y}`);
+  try {
+    if (currentColor==="#FFFFFF") await deleteDoc(pixelRef);
     else await setDoc(pixelRef,{x,y,color:currentColor});
-  }catch(err){console.error(err);}
+  } catch(err){ console.error(err); }
   startReload();
 }
-game.addEventListener('click', e=>{if(isPanning||e.button!==0) return; placePixelWithHover();});
-if(cursor) cursor.style.display='none';
+
+game.addEventListener('click', (e)=>{
+  if (isPanning || e.button !== 0) return;
+  placePixelWithHover();
+});
+
+if (cursor) cursor.style.display = 'none';
 
 // ===== Cooldown =====
 function startReload(){
-  let t=reloadTime;
-  reloadTimerEl.innerText=`Reload: ${t} sec`;
-  const interval=setInterval(()=>{
+  let t = reloadTime;
+  reloadTimerEl.innerText = `Reload: ${t} sec`;
+  const interval = setInterval(()=>{
     t--;
     if(t<=0){
       clearInterval(interval);
-      canPlace=true;
-      reloadTimerEl.innerText="Ready!";
-    } else reloadTimerEl.innerText=`Reload: ${t} sec`;
+      canPlace = true;
+      reloadTimerEl.innerText = "Ready!";
+    } else reloadTimerEl.innerText = `Reload: ${t} sec`;
   },1000);
 }
 
 // ===== Auth button =====
-authButton.addEventListener('click', async ()=>{
-  if(auth.currentUser){await signOut(auth); return;}
-  const action=prompt("Enter 1 to sign in, or 2 to create a new account:");
-  if(!action|| (action!=="1" && action!=="2")) return;
-  const email=prompt("Email:"), pass=prompt("Password:");
-  if(!email||!pass) return;
-  try{
-    if(action==="1"){
-      await signInWithEmailAndPassword(auth,email,pass);
+authButton.addEventListener('click', async () => {
+  if (auth.currentUser) {
+    await signOut(auth);
+    return;
+  }
+  const action = prompt("Enter 1 to sign in, or 2 to create a new account:");
+  if (!action || (action !== "1" && action !== "2")) return;
+
+  const email = prompt("Email:");
+  const pass = prompt("Password:");
+  if (!email || !pass) return;
+
+  try {
+    if (action === "1") {
+      await signInWithEmailAndPassword(auth, email, pass);
       alert("Come in!");
-    } else{
-      await createUserWithEmailAndPassword(auth,email,pass);
+    } else {
+      await createUserWithEmailAndPassword(auth, email, pass);
       alert("Account created!");
     }
-  }catch(e){alert(e.message);}
+  } catch (e) {
+    alert(e.message);
+  }
 });
 
-// ===== Auth state =====
-onAuthStateChanged(auth,user=>{
-  if(user){
-    authButton.textContent="Log Out";
-    adminPanel.style.display=(user.email==="logo100153@gmail.com")?"block":"none";
-  }
-  else{
-    authButton.textContent="Log In";
-    adminPanel.style.display="none";
+// ===== Auth state (admin panel) =====
+onAuthStateChanged(auth, user => {
+  if (user) {
+    authButton.textContent = "Log Out";
+    if (user.email === "logo100153@gmail.com") {
+      adminPanel.style.display = "block";
+    } else {
+      adminPanel.style.display = "none";
+    }
+  } else {
+    authButton.textContent = "Log In";
+    adminPanel.style.display = "none";
   }
 });
 
 // ===== Admin: coords input + preview =====
-function parseCoords(){
-  markers=[];
-  const value=coordsInput.value.trim();
-  if(!value){renderAll(); return;}
-  value.split(",").forEach(part=>{
-    const [xCellStr,yCellStr,wCellStr,hCellStr]=part.trim().split(/\s+/);
-    const xCell=parseInt(xCellStr), yCell=parseInt(yCellStr);
-    const wCell=parseInt(wCellStr||'1'), hCell=parseInt(hCellStr||'1');
-    if(isNaN(xCell)||isNaN(yCell)||isNaN(wCell)||isNaN(hCell)) return;
-    const startX=xCell*gridCellSize, startY=yCell*gridCellSize;
-    for(let dx=0; dx<wCell; dx++){
-      for(let dy=0; dy<hCell; dy++){
-        const px=startX+dx*gridCellSize, py=startY+dy*gridCellSize;
-        if(px>=0&&py>=0&&px<=worldWidth-gridCellSize&&py<=worldHeight-gridCellSize) markers.push([px,py]);
+function parseCoords() {
+  markers = [];
+  const value = coordsInput.value.trim();
+  if (!value) { renderAll(); return; }
+
+  value.split(",").forEach(part => {
+    const [xCellStr, yCellStr, wCellStr, hCellStr] = part.trim().split(/\s+/);
+    const xCell = parseInt(xCellStr), yCell = parseInt(yCellStr);
+    const wCell = parseInt(wCellStr || '1'), hCell = parseInt(hCellStr || '1');
+    if (Number.isNaN(xCell) || Number.isNaN(yCell) || Number.isNaN(wCell) || Number.isNaN(hCell)) return;
+
+    const startX = xCell * gridCellSize;
+    const startY = yCell * gridCellSize;
+    for (let dx = 0; dx < wCell; dx++) {
+      for (let dy = 0; dy < hCell; dy++) {
+        const px = startX + dx * gridCellSize;
+        const py = startY + dy * gridCellSize;
+        if (px >= 0 && py >= 0 && px <= WORLD_W - gridCellSize && py <= WORLD_H - gridCellSize) {
+          markers.push([px, py]);
+        }
       }
     }
   });
   renderAll();
 }
+
 coordsInput.addEventListener('input', parseCoords);
 
-async function adminApplyPixels(mode){
-  if(!auth.currentUser || auth.currentUser.email!=="logo100153@gmail.com") return alert("Только админ!");
+async function adminApplyPixels(mode) {
+  if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
+    return alert("Только админ!");
+  }
   parseCoords();
-  let count=0;
-  for(const [x,y] of markers){
-    const pixelRef=doc(db,"pixels",`${x}-${y}`);
-    if(mode==='add'){await setDoc(pixelRef,{x,y,color:currentColor}); count++;}
-    else{await deleteDoc(pixelRef); count++;}
+  let count = 0;
+  for (const [x,y] of markers) {
+    const pixelRef = doc(db,"pixels",`${x}-${y}`);
+    if (mode === 'add') { await setDoc(pixelRef, {x,y,color:currentColor}); count++; }
+    else { await deleteDoc(pixelRef); count++; }
   }
   alert(`${mode==='add'?'Добавлено':'Удалено'} пикселей: ${count}`);
 }
+
 addPixelBtn.addEventListener('click', ()=>adminApplyPixels('add'));
 removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
 
+// ===== Admin: clear map =====
 clearAllPixelsBtn.addEventListener('click', async ()=>{
   if(!auth.currentUser) return alert("Только админ!");
-  const snapshot=await getDocs(collection(db,"pixels"));
+  const snapshot = await getDocs(collection(db,"pixels"));
   snapshot.forEach(doc=>deleteDoc(doc.ref));
 });
 
+// ===== Admin: ban user =====
 banUserBtn.addEventListener('click', ()=>{
   if(!auth.currentUser) return alert("Только админ!");
-  const userId=prompt("Введите UserID для бана:");
+  const userId = prompt("Введите UserID для бана:");
   if(!userId) return;
-  const userRef=ref(rtdb,'users/'+userId);
+  const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
-
-
