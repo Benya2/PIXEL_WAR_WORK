@@ -80,7 +80,7 @@ togglePalette.addEventListener("click", () => {
 
 // ===== World map background (как в pixelplanet — карта стран) =====
 const worldMap = new Image();
-worldMap.src = 'minimapp.webp';
+worldMap.src = 'world.png';
 const worldWidth = 20000;   // <-- сделано 20000
 const worldHeight = 20000;  // <-- сделано 20000
 worldMap.onload = () => renderAll();
@@ -349,4 +349,5 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
