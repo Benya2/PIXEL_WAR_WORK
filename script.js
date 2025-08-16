@@ -78,16 +78,15 @@ togglePalette.addEventListener("click", () => {
   }
 });
 
-// --- дальше идёт твой старый код без изменений (отрисовка, камера, база, админка и т.д.) ---
-
 // ===== World map background (как в pixelplanet — карта стран) =====
-// Положи рядом файл world.png (например 1200x600). Можно больше — всё равно зум/панорамирование.
 const worldMap = new Image();
 worldMap.src = 'world.png';
+const worldWidth = 20000;   // <-- сделано 20000
+const worldHeight = 20000;  // <-- сделано 20000
 worldMap.onload = () => renderAll();
 
 // ===== Camera / Zoom / Pan =====
-let camX = 0;  // мировые координаты (px)
+let camX = 0;
 let camY = 0;
 let scale = 1;
 const MIN_SCALE = 0.25;
@@ -110,22 +109,15 @@ function snapToGrid(wx, wy) {
   ];
 }
 
-// Наведённая клетка
 let hoverCellX = 0, hoverCellY = 0;
-
-// ===== Pixels cache (для быстрого рендера) =====
-const pixelsCache = new Map(); // key: "x-y" -> {x,y,color}
-
-// ===== Admin markers =====
-let markers = []; // элементы: [x,y] в МИРОВЫХ px (кратно gridCellSize)
+const pixelsCache = new Map();
+let markers = [];
 
 // ===== Grid + Draw =====
 function renderAll() {
-  // сброс и очистка
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,game.width,game.height);
 
-  // трансформа камеры
   ctx.setTransform(scale, 0, 0, scale, -camX * scale, -camY * scale);
 
   const viewLeft = camX;
@@ -135,15 +127,12 @@ function renderAll() {
 
   // фон карта мира
   if (worldMap.complete && worldMap.naturalWidth) {
-    // растянем на размер мира (0..game.width x 0..game.height)
-    ctx.drawImage(worldMap, 0, 0, game.width, game.height);
+    ctx.drawImage(worldMap, 0, 0, worldWidth, worldHeight); // <-- изменено на 20000x20000
   } else {
-    // запасной фон
     ctx.fillStyle = '#eef6ff';
-    ctx.fillRect(0,0,game.width,game.height);
+    ctx.fillRect(0,0,worldWidth,worldHeight); // <-- изменено на 20000x20000
   }
 
-  // сетка (только в видимой области)
   ctx.beginPath();
   ctx.strokeStyle = "#ccc";
   let startX = Math.floor(viewLeft / gridCellSize) * gridCellSize;
@@ -158,7 +147,6 @@ function renderAll() {
   }
   ctx.stroke();
 
-  // пиксели
   pixelsCache.forEach(d=>{
     if (d.color !== "#FFFFFF") {
       ctx.fillStyle = d.color;
@@ -166,21 +154,18 @@ function renderAll() {
     }
   });
 
-  // админ-маркеры
   ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
   for (const [mx,my] of markers) {
     ctx.fillRect(mx, my, gridCellSize, gridCellSize);
   }
 
-  // подсветка наведённой клетки
   ctx.fillStyle = 'rgba(0,0,0,0.12)';
   ctx.fillRect(hoverCellX, hoverCellY, gridCellSize, gridCellSize);
 
-  // сброс трансформа
   ctx.setTransform(1,0,0,1,0,0);
 }
 
-// ===== Firestore subscription (замена старого прямого рисования) =====
+// ===== Firestore subscription =====
 onSnapshot(collection(db,"pixels"), snapshot=>{
   pixelsCache.clear();
   snapshot.forEach(docSnap=>{
@@ -192,7 +177,6 @@ onSnapshot(collection(db,"pixels"), snapshot=>{
 
 // ===== Mouse handling (hover, pan, zoom) =====
 game.addEventListener('mousedown', (e)=>{
-  // панорамирование: правая/средняя кнопка или модификаторы
   if (e.button === 1 || e.button === 2 || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
     isPanning = true; lastMouseX = e.clientX; lastMouseY = e.clientY;
     e.preventDefault();
@@ -219,19 +203,17 @@ game.addEventListener('wheel', (e)=>{
   e.preventDefault();
   const zoomFactor = 1.1;
   const [beforeX, beforeY] = screenToWorld(e.clientX, e.clientY);
-  const dir = e.deltaY < 0 ? 1 : -1; // вверх — приблизить
+  const dir = e.deltaY < 0 ? 1 : -1;
   const newScale = clamp(scale * (dir > 0 ? zoomFactor : 1/zoomFactor), MIN_SCALE, MAX_SCALE);
   if (newScale === scale) return;
   scale = newScale;
-
-  // держим точку под курсором на месте
   const rect = game.getBoundingClientRect();
   camX = beforeX - (e.clientX - rect.left)/scale;
   camY = beforeY - (e.clientY - rect.top)/scale;
   renderAll();
 }, { passive: false });
 
-// ===== Drawing (click to place) =====
+// ===== Drawing =====
 async function placePixelWithHover() {
   if(!auth.currentUser) return alert("Login to draw!");
   if(!canPlace) return;
@@ -247,12 +229,10 @@ async function placePixelWithHover() {
 }
 
 game.addEventListener('click', (e)=>{
-  // если в режиме панорамирования — не ставим пиксель
   if (isPanning || e.button !== 0) return;
   placePixelWithHover();
 });
 
-// Спрячем старый DOM-курсор, т.к. подсветка теперь рисуется на холсте
 if (cursor) cursor.style.display = 'none';
 
 // ===== Cooldown =====
@@ -286,7 +266,7 @@ authButton.addEventListener('click', async () => {
     if (action === "1") {
       await signInWithEmailAndPassword(auth, email, pass);
       alert("Come in!");
-    } else if (action === "2") {
+    } else {
       await createUserWithEmailAndPassword(auth, email, pass);
       alert("Account created!");
     }
@@ -310,7 +290,7 @@ onAuthStateChanged(auth, user => {
   }
 });
 
-// ===== Admin: coords input in cells + preview =====
+// ===== Admin: coords input + preview =====
 function parseCoords() {
   markers = [];
   const value = coordsInput.value.trim();
@@ -328,7 +308,7 @@ function parseCoords() {
       for (let dy = 0; dy < hCell; dy++) {
         const px = startX + dx * gridCellSize;
         const py = startY + dy * gridCellSize;
-        if (px >= 0 && py >= 0 && px <= game.width - gridCellSize && py <= game.height - gridCellSize) {
+        if (px >= 0 && py >= 0 && px <= worldWidth - gridCellSize && py <= worldHeight - gridCellSize) { // <-- изменено
           markers.push([px, py]);
         }
       }
@@ -339,7 +319,7 @@ function parseCoords() {
 
 coordsInput.addEventListener('input', parseCoords);
 
-async function adminApplyPixels(mode) { // 'add' | 'remove'
+async function adminApplyPixels(mode) {
   if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
     return alert("Только админ!");
   }
@@ -356,14 +336,12 @@ async function adminApplyPixels(mode) { // 'add' | 'remove'
 addPixelBtn.addEventListener('click', ()=>adminApplyPixels('add'));
 removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
 
-// ===== Admin: clear map =====
 clearAllPixelsBtn.addEventListener('click', async ()=>{
   if(!auth.currentUser) return alert("Только админ!");
   const snapshot = await getDocs(collection(db,"pixels"));
   snapshot.forEach(doc=>deleteDoc(doc.ref));
 });
 
-// ===== Admin: ban user by id =====
 banUserBtn.addEventListener('click', ()=>{
   if(!auth.currentUser) return alert("Только админ!");
   const userId = prompt("Введите UserID для бана:");
@@ -371,8 +349,3 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
-
-
-
-
-
