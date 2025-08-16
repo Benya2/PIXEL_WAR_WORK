@@ -62,7 +62,7 @@ h1 {
 
 #togglePalette {
   position: fixed;
-  right: 20px;
+  right: -20px;
   bottom: -10px; /* чуть ниже палитры */
   background: #fff;
   border: 1px solid #ccc;
@@ -127,6 +127,7 @@ h1 {
 #colorsChoice::-webkit-scrollbar-track {
   background: transparent;
 }
+
 
 
 
