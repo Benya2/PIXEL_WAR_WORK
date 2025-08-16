@@ -238,14 +238,14 @@ if (cursor) cursor.style.display = 'none';
 // ===== Cooldown =====
 function startReload(){
   let t = reloadTime;
-  reloadTimerEl.innerText = `Reload: ${t} сек`;
+  reloadTimerEl.innerText = `Reload: ${t} sec`;
   const interval = setInterval(()=>{
     t--;
     if(t<=0){
       clearInterval(interval);
       canPlace = true;
       reloadTimerEl.innerText = "Ready!";
-    } else reloadTimerEl.innerText = `Reload: ${t} сек`;
+    } else reloadTimerEl.innerText = `Reload: ${t} sec`;
   },1000);
 }
 
@@ -349,5 +349,6 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
