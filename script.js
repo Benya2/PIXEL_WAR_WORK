@@ -94,7 +94,7 @@ let WORLD_H = 20000 * SCALE_TILE;
 let camX = 0;
 let camY = 0;
 let scale = 1;
-const MIN_SCALE = 0.25;
+const MIN_SCALE = 0.0005;
 const MAX_SCALE = 6;
 
 let isPanning = false;
@@ -412,6 +412,7 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
 
