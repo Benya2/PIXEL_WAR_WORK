@@ -1,4 +1,3 @@
-/* Общий стиль как на PixelPlanet */
 body { 
   margin: 0;
   font-family: Arial, sans-serif;
@@ -32,37 +31,57 @@ h1 {
   pointer-events: none;
 }
 
+/* Палитра */
 #colorsChoice {
   position: fixed;
   right: 15px;
-  top: 80px;
-  display: flex;
-  flex-direction: column;
+  bottom: 50px; /* переносим вниз */
+  display: grid;
+  grid-template-columns: repeat(2, 22px); /* две колонки */
+  gap: 6px;
   padding: 6px;
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.1);
-  max-height: 80%;
+  box-shadow: 0 0 5px rgba(0,0,0,0.15);
+  max-height: 200px;
   overflow-y: auto;
 }
 
 #colorsChoice div {
   width: 20px;
   height: 20px;
-  margin: 3px 0;
   cursor: pointer;
   border: 1px solid #999;
-  border-radius: 2px; /* убрал круги, сделали квадраты */
+  border-radius: 2px;
   transition: transform 0.1s;
 }
 
 #colorsChoice div:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
 }
 
 #colorsChoice div.selected {
   border: 2px solid #000;
+}
+
+/* Кнопка открытия/закрытия палитры */
+#togglePalette {
+  position: fixed;
+  right: 15px;
+  bottom: 15px;
+  width: 35px;
+  height: 35px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  user-select: none;
 }
 
 #reloadTimer {
@@ -95,4 +114,16 @@ h1 {
   margin: 4px;
   padding: 4px 8px;
   font-size: 14px;
+}
+
+/* Стилизованная тонкая прокрутка */
+#colorsChoice::-webkit-scrollbar {
+  width: 6px;
+}
+#colorsChoice::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+#colorsChoice::-webkit-scrollbar-track {
+  background: transparent;
 }
