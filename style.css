@@ -74,8 +74,8 @@ h1 {
 
 #chat {
   position: fixed;
-  right: 200px;
-  bottom: 100px; /* чуть ниже палитры */
+  right: 1800px;
+  bottom: 700px; /* чуть ниже палитры */
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
@@ -127,6 +127,7 @@ h1 {
 #colorsChoice::-webkit-scrollbar-track {
   background: transparent;
 }
+
 
 
 
