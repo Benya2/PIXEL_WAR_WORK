@@ -95,7 +95,7 @@ let camX = 0;
 let camY = 0;
 let scale = 1;
 const MIN_SCALE = 0.25;
-const MAX_SCALE = 600;
+const MAX_SCALE = 6;
 
 let isPanning = false;
 let lastMouseX = 0, lastMouseY = 0;
@@ -412,6 +412,7 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
+
 
 
 
