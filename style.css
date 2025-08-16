@@ -21,24 +21,45 @@ h1 {
   background-color: transparent;
   border: 1px solid #000000;
 }
+
+/* Кнопка палитры */
+#paletteToggle {
+  position: fixed;
+  right: 10px;
+  bottom: 60px;
+  width: 32px;
+  height: 32px;
+  background: white;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Палитра */
 #colorsChoice {
   position: fixed;
-  right: 50px;
-  top: 100px;
-  display: flex;
+  right: 10px;
+  bottom: 100px;
+  display: flex; /* по умолчанию открыта */
   flex-direction: column;
+  background: #f5f5f5;
+  padding: 5px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 #colorsChoice div {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  margin-bottom: 8px;
+  width: 22px;
+  height: 22px;
+  margin: 3px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid rgba(0,0,0,0.2);
 }
 #colorsChoice div.selected {
   border: 2px solid black;
 }
+
 #reloadTimer {
   position: fixed;
   bottom: 10px;
