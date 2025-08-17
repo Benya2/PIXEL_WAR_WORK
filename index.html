@@ -9,6 +9,18 @@
 <body>
 <button id="authButton">Log In</button>
 <h1>Pixel War</h1>
+    
+    <div id="coordsDisplay" style="
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid #000;
+  padding: 4px 8px;
+  font-family: monospace;
+  z-index: 1000;
+">X: 0  Y: 0</div>
+
 <div id="onlinePlayers" style="position:fixed; top:10px; right:10px; background:#fff; padding:5px; border:1px solid #000;"></div>
 <div id="colorsChoice"></div>
 <div id="togglePalette">🎨</div>
@@ -27,4 +39,5 @@
 <script type="module" src="script.js"></script>
 </body>
 </html>
+
 
