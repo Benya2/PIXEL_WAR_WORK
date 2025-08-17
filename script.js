@@ -34,6 +34,37 @@ const coordsInput = document.getElementById('coordsInput');
 const addPixelBtn = document.getElementById('addPixelBtn');
 const removePixelBtn = document.getElementById('removePixelBtn');
 
+
+const teleportInput = document.getElementById('teleportInput');
+const teleportBtn = document.getElementById('teleportBtn');
+
+teleportBtn.addEventListener('click', () => {
+  if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
+    return alert("Только админ!");
+  }
+
+  const value = teleportInput.value.trim();
+  if (!value) return;
+
+  const [xStr, yStr] = value.split(/\s+/);
+  const xCell = parseInt(xStr), yCell = parseInt(yStr);
+
+  if (Number.isNaN(xCell) || Number.isNaN(yCell)) {
+    return alert("Введите корректные координаты X Y");
+  }
+
+  // переводим координаты в мировые (по сетке)
+  const worldX = xCell * gridCellSize;
+  const worldY = yCell * gridCellSize;
+
+  // смещаем камеру так, чтобы указанная клетка была по центру
+  camX = worldX - (game.width / 2) / scale;
+  camY = worldY - (game.height / 2) / scale;
+
+  renderAll();
+});
+
+
 // без сглаживания
 ctx.imageSmoothingEnabled = false;
 
@@ -472,6 +503,7 @@ function updateOnlinePlayers() {
 }
 
 updateOnlinePlayers();
+
 
 
 
