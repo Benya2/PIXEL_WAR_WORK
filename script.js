@@ -19,6 +19,7 @@ const rtdb = getDatabase(app);
 const auth = getAuth(app);
 
 // ===== DOM =====
+const coordsDisplayEl = document.getElementById('coordsDisplay');
 const colorsChoiceEl = document.getElementById('colorsChoice');
 const paletteToggle = document.getElementById('paletteToggle');
 const game = document.getElementById('game');
@@ -452,3 +453,4 @@ function updateOnlinePlayers() {
 }
 
 updateOnlinePlayers();
+
