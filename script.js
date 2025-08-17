@@ -268,6 +268,8 @@ game.addEventListener('mousemove', (e)=>{
   const [wx, wy] = screenToWorld(e.clientX, e.clientY);
   [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
   
+  updateCoordsDisplay();
+  
   renderAll();
 });
 
@@ -282,6 +284,13 @@ game.addEventListener('wheel', (e)=>{
   const rect = game.getBoundingClientRect();
   camX = beforeX - (e.clientX - rect.left)/scale;
   camY = beforeY - (e.clientY - rect.top)/scale;
+
+  
+const [wx2, wy2] = screenToWorld(e.clientX, e.clientY);
+[hoverCellX, hoverCellY] = snapToGrid(wx2, wy2);
+updateCoordsDisplay();
+
+  
   renderAll();
 }, { passive: false });
 
@@ -463,6 +472,7 @@ function updateOnlinePlayers() {
 }
 
 updateOnlinePlayers();
+
 
 
 
