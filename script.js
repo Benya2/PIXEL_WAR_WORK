@@ -268,9 +268,10 @@ game.addEventListener('mousemove', (e)=>{
   const [wx, wy] = screenToWorld(e.clientX, e.clientY);
   [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
   
-  updateCoordsDisplay();
-  
   renderAll();
+
+  
+  updateCoordsDisplay();
 });
 
 
@@ -471,5 +472,6 @@ function updateOnlinePlayers() {
 }
 
 updateOnlinePlayers();
+
 
 
