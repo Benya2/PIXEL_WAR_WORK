@@ -506,7 +506,6 @@ updateOnlinePlayers();
 
 
 
-// ===== Mobile touch controls =====
 let lastTouchX = 0, lastTouchY = 0;
 let isTouchPanning = false;
 let lastTouchDist = 0;
@@ -518,42 +517,44 @@ function getTouchDist(touches) {
   return Math.sqrt(dx*dx + dy*dy);
 }
 
-game.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 1) { 
+game.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
     isTouchPanning = true;
     lastTouchX = e.touches[0].clientX;
     lastTouchY = e.touches[0].clientY;
-  } else if (e.touches.length === 2) { 
+  } else if (e.touches.length === 2) {
     lastTouchDist = getTouchDist(e.touches);
   }
-});
+}, { passive: false });
 
-game.addEventListener('touchmove', (e) => {
+game.addEventListener('touchmove', e => {
   e.preventDefault();
   if (e.touches.length === 1 && isTouchPanning) {
-    const touch = e.touches[0];
-    const dx = touch.clientX - lastTouchX;
-    const dy = touch.clientY - lastTouchY;
-
+    const dx = e.touches[0].clientX - lastTouchX;
+    const dy = e.touches[0].clientY - lastTouchY;
     camX -= dx / scale;
     camY -= dy / scale;
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
 
-    lastTouchX = touch.clientX;
-    lastTouchY = touch.clientY;
+    const [wx, wy] = screenToWorld(lastTouchX, lastTouchY);
+    [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
+    updateCoordsDisplay();
 
     renderAll();
   } else if (e.touches.length === 2) {
     const newDist = getTouchDist(e.touches);
     if (lastTouchDist > 0) {
       const zoomFactor = newDist / lastTouchDist;
-      const rect = game.getBoundingClientRect();
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
 
       const [beforeX, beforeY] = screenToWorld(midX, midY);
       scale = clamp(scale * zoomFactor, MIN_SCALE, MAX_SCALE);
-      camX = beforeX - (midX - rect.left) / scale;
-      camY = beforeY - (midY - rect.top) / scale;
+      const rect = game.getBoundingClientRect();
+      camX = beforeX - (midX - rect.left)/scale;
+      camY = beforeY - (midY - rect.top)/scale;
 
       const [wx2, wy2] = screenToWorld(midX, midY);
       [hoverCellX, hoverCellY] = snapToGrid(wx2, wy2);
@@ -565,9 +566,12 @@ game.addEventListener('touchmove', (e) => {
   }
 }, { passive: false });
 
-game.addEventListener('touchend', (e) => {
-  if (e.touches.length === 0) {
-    isTouchPanning = false;
-    lastTouchDist = 0;
+game.addEventListener('touchend', e => {
+  if (e.touches.length === 0) isTouchPanning = false;
+});
+
+game.addEventListener('touchend', e => {
+  if (e.touches.length === 0 && !isTouchPanning) {
+    placePixelWithHover();
   }
 });
