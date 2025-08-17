@@ -503,3 +503,36 @@ function updateOnlinePlayers() {
 }
 
 updateOnlinePlayers();
+
+
+
+
+// ===== Mobile touch events =====
+let lastTouchX = 0, lastTouchY = 0;
+let isTouchPanning = false;
+
+game.addEventListener('touchstart', (e)=>{
+  if(e.touches.length === 1){
+    isTouchPanning = true;
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
+  }
+});
+
+game.addEventListener('touchmove', (e)=>{
+  if(isTouchPanning && e.touches.length === 1){
+    const touch = e.touches[0];
+    const dx = touch.clientX - lastTouchX;
+    const dy = touch.clientY - lastTouchY;
+    camX -= dx / scale;
+    camY -= dy / scale;
+    lastTouchX = touch.clientX;
+    lastTouchY = touch.clientY;
+    renderAll();
+  }
+  e.preventDefault();
+}, { passive: false });
+
+game.addEventListener('touchend', (e)=>{
+  isTouchPanning = false;
+});
