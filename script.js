@@ -119,6 +119,15 @@ let hoverCellX = 0, hoverCellY = 0;
 const pixelsCache = new Map();
 let markers = [];
 
+
+function updateCoordsDisplay() {
+  if (!coordsDisplayEl) return;
+  const cellX = Math.floor(hoverCellX / gridCellSize);
+  const cellY = Math.floor(hoverCellY / gridCellSize);
+  coordsDisplayEl.textContent = `X: ${cellX}  Y: ${cellY}`;
+}
+
+
 // ===== Tiles setup (режем большую карту на тайлы) =====
 const TILE_SIZE = 1000;
 let tiles = [];
@@ -258,8 +267,17 @@ game.addEventListener('mousemove', (e)=>{
   }
   const [wx, wy] = screenToWorld(e.clientX, e.clientY);
   [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
+  
+  updateCoordsDisplay();
+  
   renderAll();
 });
+
+
+const [wx2, wy2] = screenToWorld(e.clientX, e.clientY);
+[hoverCellX, hoverCellY] = snapToGrid(wx2, wy2);
+updateCoordsDisplay();
+
 
 game.addEventListener('wheel', (e)=>{
   e.preventDefault();
@@ -453,4 +471,5 @@ function updateOnlinePlayers() {
 }
 
 updateOnlinePlayers();
+
 
