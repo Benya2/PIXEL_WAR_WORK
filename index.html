@@ -21,6 +21,29 @@
   z-index: 1000;
 ">X: 0  Y: 0</div>
 
+    
+    <div id="mobileControls" style="
+  position: fixed; 
+  bottom: 20px; 
+  right: 20px; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 5px; 
+  z-index: 10000;
+">
+  <button id="upBtn">↑</button>
+  <div style="display:flex; gap:5px;">
+    <button id="leftBtn">←</button>
+    <button id="downBtn">↓</button>
+    <button id="rightBtn">→</button>
+  </div>
+  <div style="display:flex; gap:5px; margin-top:5px;">
+    <button id="zoomInBtn">+</button>
+    <button id="zoomOutBtn">-</button>
+  </div>
+</div>
+
+
 <div id="onlinePlayers" style="position:fixed; top:10px; right:10px; background:#fff; padding:5px; border:1px solid #000;"></div>
 <div id="colorsChoice"></div>
 <div id="togglePalette">🎨</div>
@@ -41,6 +64,7 @@
 <script type="module" src="bundle.js"></script>
 </body>
 </html>
+
 
 
 
