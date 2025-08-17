@@ -506,7 +506,69 @@ updateOnlinePlayers();
 
 
 
+// ===== Touch handling for mobile =====
+let lastTouchX = 0, lastTouchY = 0;
+let isTouchPanning = false;
+let lastTouchDist = 0;
 
+function getTouchDist(touches) {
+  if (touches.length < 2) return 0;
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
 
+game.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) { 
+    isTouchPanning = true;
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) { 
+    lastTouchDist = getTouchDist(e.touches);
+  }
+});
 
+game.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 1 && isTouchPanning) {
+    const touch = e.touches[0];
+    const dx = touch.clientX - lastTouchX;
+    const dy = touch.clientY - lastTouchY;
 
+    camX -= dx / scale;
+    camY -= dy / scale;
+
+    lastTouchX = touch.clientX;
+    lastTouchY = touch.clientY;
+
+    renderAll();
+    e.preventDefault();
+  } else if (e.touches.length === 2) { 
+    const newDist = getTouchDist(e.touches);
+    if (lastTouchDist > 0) {
+      const zoomFactor = newDist / lastTouchDist;
+      const rect = game.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+      const [beforeX, beforeY] = screenToWorld(midX, midY);
+      scale = clamp(scale * zoomFactor, MIN_SCALE, MAX_SCALE);
+      camX = beforeX - (midX - rect.left) / scale;
+      camY = beforeY - (midY - rect.top) / scale;
+
+      const [wx2, wy2] = screenToWorld(midX, midY);
+      [hoverCellX, hoverCellY] = snapToGrid(wx2, wy2);
+      updateCoordsDisplay();
+
+      renderAll();
+    }
+    lastTouchDist = newDist;
+    e.preventDefault();
+  }
+}, { passive: false });
+
+game.addEventListener('touchend', (e) => {
+  if (e.touches.length === 0) {
+    isTouchPanning = false;
+    lastTouchDist = 0;
+  }
+});
