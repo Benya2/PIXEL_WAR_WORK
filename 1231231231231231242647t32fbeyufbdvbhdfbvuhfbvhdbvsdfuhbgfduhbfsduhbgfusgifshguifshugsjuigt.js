@@ -506,7 +506,7 @@ updateOnlinePlayers();
 
 
 
-// ===== Touch handling for mobile =====
+// ===== Mobile touch controls =====
 let lastTouchX = 0, lastTouchY = 0;
 let isTouchPanning = false;
 let lastTouchDist = 0;
@@ -529,6 +529,7 @@ game.addEventListener('touchstart', (e) => {
 });
 
 game.addEventListener('touchmove', (e) => {
+  e.preventDefault();
   if (e.touches.length === 1 && isTouchPanning) {
     const touch = e.touches[0];
     const dx = touch.clientX - lastTouchX;
@@ -541,8 +542,7 @@ game.addEventListener('touchmove', (e) => {
     lastTouchY = touch.clientY;
 
     renderAll();
-    e.preventDefault();
-  } else if (e.touches.length === 2) { 
+  } else if (e.touches.length === 2) {
     const newDist = getTouchDist(e.touches);
     if (lastTouchDist > 0) {
       const zoomFactor = newDist / lastTouchDist;
@@ -562,7 +562,6 @@ game.addEventListener('touchmove', (e) => {
       renderAll();
     }
     lastTouchDist = newDist;
-    e.preventDefault();
   }
 }, { passive: false });
 
