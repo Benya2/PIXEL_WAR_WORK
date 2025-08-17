@@ -429,6 +429,42 @@ function parseCoords() {
   renderAll();
 }
 
+
+// ===== Mobile buttons for camera & zoom =====
+const upBtn = document.getElementById("upBtn");
+const downBtn = document.getElementById("downBtn");
+const leftBtn = document.getElementById("leftBtn");
+const rightBtn = document.getElementById("rightBtn");
+const zoomInBtn = document.getElementById("zoomInBtn");
+const zoomOutBtn = document.getElementById("zoomOutBtn");
+
+const moveSpeed = 50; // пикселей за нажатие
+const zoomFactorBtn = 1.2;
+
+function moveCamera(dx, dy){
+  camX += dx / scale;
+  camY += dy / scale;
+  renderAll();
+}
+
+upBtn.addEventListener('click', ()=> moveCamera(0, -moveSpeed));
+downBtn.addEventListener('click', ()=> moveCamera(0, moveSpeed));
+leftBtn.addEventListener('click', ()=> moveCamera(-moveSpeed, 0));
+rightBtn.addEventListener('click', ()=> moveCamera(moveSpeed, 0));
+
+zoomInBtn.addEventListener('click', ()=>{
+  const newScale = clamp(scale * zoomFactorBtn, MIN_SCALE, MAX_SCALE);
+  scale = newScale;
+  renderAll();
+});
+zoomOutBtn.addEventListener('click', ()=>{
+  const newScale = clamp(scale / zoomFactorBtn, MIN_SCALE, MAX_SCALE);
+  scale = newScale;
+  renderAll();
+});
+
+
+
 coordsInput.addEventListener('input', parseCoords);
 
 async function adminApplyPixels(mode) {
@@ -536,3 +572,4 @@ game.addEventListener('touchmove', (e)=>{
 game.addEventListener('touchend', (e)=>{
   isTouchPanning = false;
 });
+
