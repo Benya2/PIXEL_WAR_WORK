@@ -126,7 +126,7 @@ let WORLD_H = 20000 * SCALE_TILE;
 let camX = 0;
 let camY = 0;
 let scale = 1;
-const MIN_SCALE = 0.0005;
+const MIN_SCALE = 0.005;
 const MAX_SCALE = 6;
 
 let isPanning = false;
@@ -503,6 +503,7 @@ function updateOnlinePlayers() {
 }
 
 updateOnlinePlayers();
+
 
 
 
