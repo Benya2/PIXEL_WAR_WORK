@@ -577,7 +577,6 @@ game.addEventListener('touchend', (e)=>{
 
 
 
-// ===== Overlay Template =====
 const overlay = document.getElementById("overlayTemplate");
 const fileInput = document.getElementById("templateFile");
 const opacityRange = document.getElementById("opacityRange");
@@ -622,13 +621,13 @@ toggleBtn.addEventListener("click", ()=>{
   overlay.style.display = templateVisible ? "block" : "none";
 });
 
-// обновление позиции с учётом камеры и зума
+// обновление позиции
 function updateTemplatePosition(){
   overlay.style.transform = `translate(${(-camX * scale) + templateX}px, ${(-camY * scale) + templateY}px) scale(${scale})`;
   overlay.style.transformOrigin = "top left";
 }
 
-// обновляем при каждом рендере
+// перерисовка вместе с картой
 const oldRenderAll = renderAll;
 renderAll = function(){
   oldRenderAll();
