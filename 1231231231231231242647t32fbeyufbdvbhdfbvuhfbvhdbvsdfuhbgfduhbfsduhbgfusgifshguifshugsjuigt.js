@@ -573,3 +573,64 @@ game.addEventListener('touchend', (e)=>{
   isTouchPanning = false;
 });
 
+
+
+
+
+// ===== Overlay Template =====
+const overlay = document.getElementById("overlayTemplate");
+const fileInput = document.getElementById("templateFile");
+const opacityRange = document.getElementById("opacityRange");
+const coordX = document.getElementById("coordX");
+const coordY = document.getElementById("coordY");
+const applyCoordsBtn = document.getElementById("applyCoords");
+const toggleBtn = document.getElementById("toggleBtn");
+
+let templateX = 0;
+let templateY = 0;
+let templateOpacity = 0.5;
+let templateVisible = true;
+
+// загрузка картинки
+fileInput.addEventListener("change", (e)=>{
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event)=>{
+    overlay.src = event.target.result;
+    overlay.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+});
+
+// прозрачность
+opacityRange.addEventListener("input", ()=>{
+  templateOpacity = opacityRange.value;
+  overlay.style.opacity = templateOpacity;
+});
+
+// координаты
+applyCoordsBtn.addEventListener("click", ()=>{
+  templateX = parseInt(coordX.value) || 0;
+  templateY = parseInt(coordY.value) || 0;
+  updateTemplatePosition();
+});
+
+// показать/скрыть
+toggleBtn.addEventListener("click", ()=>{
+  templateVisible = !templateVisible;
+  overlay.style.display = templateVisible ? "block" : "none";
+});
+
+// обновление позиции с учётом камеры и зума
+function updateTemplatePosition(){
+  overlay.style.transform = `translate(${(-camX * scale) + templateX}px, ${(-camY * scale) + templateY}px) scale(${scale})`;
+  overlay.style.transformOrigin = "top left";
+}
+
+// обновляем при каждом рендере
+const oldRenderAll = renderAll;
+renderAll = function(){
+  oldRenderAll();
+  if (overlay.src) updateTemplatePosition();
+};
