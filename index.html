@@ -78,7 +78,7 @@
 <div id="templateControls" style="
   position: fixed;
   bottom: 20px;
-  left: 20px;
+  left: -480px;
   background: rgba(0,0,0,0.7);
   color: white;
   padding: 10px;
@@ -86,11 +86,11 @@
   z-index: 10000;
 ">
   <input type="file" id="templateFile" accept="image/*"><br><br>
-  Прозрачность: <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0.5"><br><br>
+  Transparency: <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0.5"><br><br>
   X: <input type="number" id="coordX" value="0" style="width:70px;">
   Y: <input type="number" id="coordY" value="0" style="width:70px;">
   <button id="applyCoords">OK</button><br><br>
-  <button id="toggleBtn">Скрыть/Показать</button>
+  <button id="toggleBtn">Hide/Show</button>
 </div>
 
 
@@ -98,3 +98,4 @@
 <script type="module" src="bundle.js"></script>
 </body>
 </html>
+
