@@ -633,3 +633,64 @@ renderAll = function(){
   oldRenderAll();
   if (overlay.src) updateTemplatePosition();
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ===== Drawing with cooldown =====
+let cooldown = 0; // текущий кулдаун
+const MAX_COOLDOWN = 60; // лимит
+const cooldownDisplay = document.createElement("div");
+cooldownDisplay.style.position = "fixed";
+cooldownDisplay.style.top = "10px";
+cooldownDisplay.style.right = "10px";
+cooldownDisplay.style.background = "rgba(0,0,0,0.7)";
+cooldownDisplay.style.color = "white";
+cooldownDisplay.style.padding = "6px 10px";
+cooldownDisplay.style.borderRadius = "6px";
+cooldownDisplay.style.fontFamily = "Arial, sans-serif";
+cooldownDisplay.style.zIndex = "9999";
+document.body.appendChild(cooldownDisplay);
+function updateCooldownDisplay() {
+  cooldownDisplay.innerText = `Cooldown: ${cooldown}s`;
+  cooldownDisplay.style.display = cooldown > 0 ? "block" : "none";
+}
+updateCooldownDisplay();
+
+// таймер кулдауна
+setInterval(()=>{
+  if(cooldown>0){ cooldown--; updateCooldownDisplay(); }
+},1000);
+
+async function placePixelWithHover() {
+  if(!auth.currentUser) return alert("Login to draw!");
+  if(cooldown >= MAX_COOLDOWN) return alert("⏳ Cooldown ≥ 60 sec, wait!");
+  
+  const x = hoverCellX;
+  const y = hoverCellY;
+  const pixelRef = doc(db,"pixels",`${x}-${y}`);
+  try {
+    if(currentColor==="#FFFFFF") await deleteDoc(pixelRef);
+    else await setDoc(pixelRef,{x,y,color:currentColor});
+  } catch(err){ console.error(err); }
+
+  // увеличиваем кулдаун +1
+  cooldown++;
+  updateCooldownDisplay();
+
+  startReload(); // твой reloadTimer
+}
+
+game.addEventListener('click', (e)=>{
+  if (isPanning || e.button !== 0) return;
+  placePixelWithHover();
+});
