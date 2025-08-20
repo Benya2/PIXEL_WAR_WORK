@@ -543,35 +543,49 @@ updateOnlinePlayers();
 
 
 
-// ===== Mobile touch events =====
-let lastTouchX = 0, lastTouchY = 0;
-let isTouchPanning = false;
+// ===== Touch pinch zoom =====
+let lastDist = 0;
+
+function getDistance(t1, t2){
+  const dx = t1.clientX - t2.clientX;
+  const dy = t1.clientY - t2.clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
 
 game.addEventListener('touchstart', (e)=>{
-  if(e.touches.length === 1){
-    isTouchPanning = true;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
+  if(e.touches.length === 2){
+    lastDist = getDistance(e.touches[0], e.touches[1]);
   }
-});
+}, { passive: false });
 
 game.addEventListener('touchmove', (e)=>{
-  if(isTouchPanning && e.touches.length === 1){
-    const touch = e.touches[0];
-    const dx = touch.clientX - lastTouchX;
-    const dy = touch.clientY - lastTouchY;
-    camX -= dx / scale;
-    camY -= dy / scale;
-    lastTouchX = touch.clientX;
-    lastTouchY = touch.clientY;
-    renderAll();
+  if(e.touches.length === 2){
+    const dist = getDistance(e.touches[0], e.touches[1]);
+    if(lastDist > 0){
+      const zoomFactor = dist / lastDist;
+
+      // центрируем зум на середине двух пальцев
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+      const [beforeX, beforeY] = screenToWorld(midX, midY);
+      scale = clamp(scale * zoomFactor, MIN_SCALE, MAX_SCALE);
+      const rect = game.getBoundingClientRect();
+      camX = beforeX - (midX - rect.left)/scale;
+      camY = beforeY - (midY - rect.top)/scale;
+      renderAll();
+    }
+    lastDist = dist;
+    e.preventDefault();
   }
-  e.preventDefault();
 }, { passive: false });
 
 game.addEventListener('touchend', (e)=>{
-  isTouchPanning = false;
-});
+  if(e.touches.length < 2){
+    lastDist = 0;
+  }
+}, { passive: false });
+
 
 
 
@@ -633,3 +647,4 @@ renderAll = function(){
   oldRenderAll();
   if (overlay.src) updateTemplatePosition();
 };
+
