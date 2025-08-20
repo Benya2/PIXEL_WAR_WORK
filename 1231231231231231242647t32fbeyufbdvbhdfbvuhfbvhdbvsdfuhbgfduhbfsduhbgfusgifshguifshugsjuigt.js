@@ -118,7 +118,7 @@ const worldMap = new Image();
 worldMap.src = 'world.png';
 
 // Итоговый "мировой" размер для рендера (масштабированный)
-const SCALE_TILE = 40; // увеличение карты (поменяй 2/3/4 ...)
+const SCALE_TILE = 50; // увеличение карты (поменяй 2/3/4 ...)
 let WORLD_W = 20000 * SCALE_TILE;
 let WORLD_H = 20000 * SCALE_TILE;
 
@@ -694,3 +694,4 @@ game.addEventListener('click', (e)=>{
   if (isPanning || e.button !== 0) return;
   placePixelWithHover();
 });
+
