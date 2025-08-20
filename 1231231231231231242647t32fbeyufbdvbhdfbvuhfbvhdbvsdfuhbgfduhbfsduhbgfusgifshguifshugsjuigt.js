@@ -543,7 +543,10 @@ updateOnlinePlayers();
 
 
 
-// ===== Touch pinch zoom =====
+// ===== Touch управление =====
+let isTouchPanning = false;
+let lastTouchX = 0;
+let lastTouchY = 0;
 let lastDist = 0;
 
 function getDistance(t1, t2){
@@ -553,18 +556,36 @@ function getDistance(t1, t2){
 }
 
 game.addEventListener('touchstart', (e)=>{
-  if(e.touches.length === 2){
+  if(e.touches.length === 1){
+    // один палец → панорамирование
+    isTouchPanning = true;
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
+  } else if(e.touches.length === 2){
+    // два пальца → pinch zoom
+    isTouchPanning = false;
     lastDist = getDistance(e.touches[0], e.touches[1]);
   }
+  e.preventDefault();
 }, { passive: false });
 
 game.addEventListener('touchmove', (e)=>{
-  if(e.touches.length === 2){
+  if(e.touches.length === 1 && isTouchPanning){
+    // панорамирование
+    const dx = (e.touches[0].clientX - lastTouchX) / scale;
+    const dy = (e.touches[0].clientY - lastTouchY) / scale;
+    camX -= dx;
+    camY -= dy;
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
+    renderAll();
+  } else if(e.touches.length === 2){
+    // pinch zoom
     const dist = getDistance(e.touches[0], e.touches[1]);
     if(lastDist > 0){
       const zoomFactor = dist / lastDist;
 
-      // центрируем зум на середине двух пальцев
+      // центрируем зум на середине пальцев
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
 
@@ -576,15 +597,20 @@ game.addEventListener('touchmove', (e)=>{
       renderAll();
     }
     lastDist = dist;
-    e.preventDefault();
   }
+  e.preventDefault();
 }, { passive: false });
 
 game.addEventListener('touchend', (e)=>{
   if(e.touches.length < 2){
     lastDist = 0;
   }
+  if(e.touches.length === 0){
+    isTouchPanning = false;
+  }
+  e.preventDefault();
 }, { passive: false });
+
 
 
 
@@ -647,4 +673,5 @@ renderAll = function(){
   oldRenderAll();
   if (overlay.src) updateTemplatePosition();
 };
+
 
