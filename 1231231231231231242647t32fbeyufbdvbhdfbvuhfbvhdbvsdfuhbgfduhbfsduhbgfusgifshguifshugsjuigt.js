@@ -543,79 +543,6 @@ updateOnlinePlayers();
 
 
 
-// ===== Управление пальцами на телефоне =====
-const game = document.getElementById("game");
-game.style.touchAction = "none"; // запретить скролл страницы на телефоне
-
-let isTouchPanning = false;
-let lastTouchX = 0;
-let lastTouchY = 0;
-let lastDist = 0;
-
-function getDistance(t1, t2){
-  const dx = t1.clientX - t2.clientX;
-  const dy = t1.clientY - t2.clientY;
-  return Math.sqrt(dx*dx + dy*dy);
-}
-
-game.addEventListener("touchstart", (e) => {
-  if (e.touches.length === 1) {
-    // один палец → перемещение
-    isTouchPanning = true;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-  } else if (e.touches.length === 2) {
-    // два пальца → pinch zoom
-    isTouchPanning = false;
-    lastDist = getDistance(e.touches[0], e.touches[1]);
-  }
-  e.preventDefault();
-}, { passive: false });
-
-game.addEventListener("touchmove", (e) => {
-  if (e.touches.length === 1 && isTouchPanning) {
-    // панорамирование карты
-    const dx = (e.touches[0].clientX - lastTouchX) / scale;
-    const dy = (e.touches[0].clientY - lastTouchY) / scale;
-    camX -= dx;
-    camY -= dy;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-    renderAll();
-  } else if (e.touches.length === 2) {
-    // pinch zoom
-    const dist = getDistance(e.touches[0], e.touches[1]);
-    if (lastDist > 0) {
-      const zoomFactor = dist / lastDist;
-
-      // центрируем зум на середине пальцев
-      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-
-      const [beforeX, beforeY] = screenToWorld(midX, midY);
-      scale = clamp(scale * zoomFactor, MIN_SCALE, MAX_SCALE);
-      const rect = game.getBoundingClientRect();
-      camX = beforeX - (midX - rect.left) / scale;
-      camY = beforeY - (midY - rect.top) / scale;
-      renderAll();
-    }
-    lastDist = dist;
-  }
-  e.preventDefault();
-}, { passive: false });
-
-game.addEventListener("touchend", (e) => {
-  if (e.touches.length < 2) {
-    lastDist = 0;
-  }
-  if (e.touches.length === 0) {
-    isTouchPanning = false;
-  }
-  e.preventDefault();
-}, { passive: false });
-
-
-
 
 
 
@@ -676,6 +603,3 @@ renderAll = function(){
   oldRenderAll();
   if (overlay.src) updateTemplatePosition();
 };
-
-
-
