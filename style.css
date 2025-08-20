@@ -12,6 +12,7 @@ h1 {
 }
 
 #game {
+  touch-action: none; /* отключает свайпы/зум браузера */
   display: block;
   margin: 20px auto;
   width: 1200px;
@@ -127,6 +128,7 @@ h1 {
 #colorsChoice::-webkit-scrollbar-track {
   background: transparent;
 }
+
 
 
 
