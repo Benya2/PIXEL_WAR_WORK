@@ -543,7 +543,10 @@ updateOnlinePlayers();
 
 
 
-// ===== Touch управление =====
+// ===== Управление пальцами на телефоне =====
+const game = document.getElementById("game");
+game.style.touchAction = "none"; // запретить скролл страницы на телефоне
+
 let isTouchPanning = false;
 let lastTouchX = 0;
 let lastTouchY = 0;
@@ -555,13 +558,13 @@ function getDistance(t1, t2){
   return Math.sqrt(dx*dx + dy*dy);
 }
 
-game.addEventListener('touchstart', (e)=>{
-  if(e.touches.length === 1){
-    // один палец → панорамирование
+game.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 1) {
+    // один палец → перемещение
     isTouchPanning = true;
     lastTouchX = e.touches[0].clientX;
     lastTouchY = e.touches[0].clientY;
-  } else if(e.touches.length === 2){
+  } else if (e.touches.length === 2) {
     // два пальца → pinch zoom
     isTouchPanning = false;
     lastDist = getDistance(e.touches[0], e.touches[1]);
@@ -569,9 +572,9 @@ game.addEventListener('touchstart', (e)=>{
   e.preventDefault();
 }, { passive: false });
 
-game.addEventListener('touchmove', (e)=>{
-  if(e.touches.length === 1 && isTouchPanning){
-    // панорамирование
+game.addEventListener("touchmove", (e) => {
+  if (e.touches.length === 1 && isTouchPanning) {
+    // панорамирование карты
     const dx = (e.touches[0].clientX - lastTouchX) / scale;
     const dy = (e.touches[0].clientY - lastTouchY) / scale;
     camX -= dx;
@@ -579,10 +582,10 @@ game.addEventListener('touchmove', (e)=>{
     lastTouchX = e.touches[0].clientX;
     lastTouchY = e.touches[0].clientY;
     renderAll();
-  } else if(e.touches.length === 2){
+  } else if (e.touches.length === 2) {
     // pinch zoom
     const dist = getDistance(e.touches[0], e.touches[1]);
-    if(lastDist > 0){
+    if (lastDist > 0) {
       const zoomFactor = dist / lastDist;
 
       // центрируем зум на середине пальцев
@@ -592,8 +595,8 @@ game.addEventListener('touchmove', (e)=>{
       const [beforeX, beforeY] = screenToWorld(midX, midY);
       scale = clamp(scale * zoomFactor, MIN_SCALE, MAX_SCALE);
       const rect = game.getBoundingClientRect();
-      camX = beforeX - (midX - rect.left)/scale;
-      camY = beforeY - (midY - rect.top)/scale;
+      camX = beforeX - (midX - rect.left) / scale;
+      camY = beforeY - (midY - rect.top) / scale;
       renderAll();
     }
     lastDist = dist;
@@ -601,11 +604,11 @@ game.addEventListener('touchmove', (e)=>{
   e.preventDefault();
 }, { passive: false });
 
-game.addEventListener('touchend', (e)=>{
-  if(e.touches.length < 2){
+game.addEventListener("touchend", (e) => {
+  if (e.touches.length < 2) {
     lastDist = 0;
   }
-  if(e.touches.length === 0){
+  if (e.touches.length === 0) {
     isTouchPanning = false;
   }
   e.preventDefault();
@@ -673,5 +676,6 @@ renderAll = function(){
   oldRenderAll();
   if (overlay.src) updateTemplatePosition();
 };
+
 
 
