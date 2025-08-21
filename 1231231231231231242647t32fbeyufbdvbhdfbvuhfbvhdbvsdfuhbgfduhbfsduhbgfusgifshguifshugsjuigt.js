@@ -75,7 +75,7 @@ game.height = 600;
 // ===== State =====
 let currentColor = "#000000";
 let canPlace = true;
-const reloadTime = 5;
+const reloadTime = 1;
 
 // ===== Colors (30 как в PixelPlanet) =====
 const colors = [
@@ -603,5 +603,6 @@ renderAll = function(){
   oldRenderAll();
   if (overlay.src) updateTemplatePosition();
 };
+
 
 
