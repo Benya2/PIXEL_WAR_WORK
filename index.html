@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pixel War</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=template2">
 </head>
 <body>
 <button id="authButton">Log In</button>
@@ -48,9 +48,10 @@
 <div id="colorsChoice"></div>
 <div id="togglePalette">🎨</div>
 <div id="chat">💬</div>
+<button id="pencilToggle" type="button" title="Pencil (Shift)" aria-label="Pencil" aria-pressed="false">&#9998;</button>
 <canvas id="game"></canvas>
-    
-    <img id="overlayTemplate" style="
+<div id="templateViewport">
+  <img id="overlayTemplate" style="
   position: absolute;
   top: 0;
   left: 0;
@@ -59,6 +60,7 @@
   z-index: 9999;
   display: none;
 ">
+</div>
 
 <div id="cursor"></div>
 <div id="reloadTimer"></div>
@@ -71,26 +73,28 @@
     <button id="removePixelBtn">Удалить</button>
     <input type="text" id="teleportInput" placeholder="X Y" style="width:150px;">
     <button id="teleportBtn">Телепорт</button>
+</div>
 
     
 
 
-<div id="templateControls" style="
-  position: fixed;
-  bottom: 20px;
-  left: -480px;
-  background: rgba(0,0,0,0.7);
-  color: white;
-  padding: 10px;
-  border-radius: 8px;
-  z-index: 10000;
-">
-  <input type="file" id="templateFile" accept="image/*"><br><br>
-  Transparency: <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0.5"><br><br>
-  X: <input type="number" id="coordX" value="0" style="width:70px;">
-  Y: <input type="number" id="coordY" value="0" style="width:70px;">
-  <button id="applyCoords">OK</button><br><br>
-  <button id="toggleBtn">Hide/Show</button>
+<button id="templatePanelToggle" type="button" title="Template" aria-label="Template" aria-expanded="false">🗺</button>
+<div id="templateControls" class="template-panel">
+  <div class="template-row">
+    <input type="file" id="templateFile" accept="image/*">
+  </div>
+  <div class="template-row template-grid">
+    <label>X <input type="number" id="coordX" value="0"></label>
+    <label>Y <input type="number" id="coordY" value="0"></label>
+  </div>
+  <div class="template-row">
+    <label>Opacity <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0.5"></label>
+  </div>
+  <div class="template-actions">
+    <button id="applyCoords" type="button">OK</button>
+    <button id="toggleBtn" type="button">Hide</button>
+    <button id="clearTemplate" type="button">Clear</button>
+  </div>
 </div>
 
 
@@ -113,14 +117,6 @@
 </div>
 
 
-</div>
-<script type="module" src="bundle.js"></script>
+<script type="module" src="notast.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
