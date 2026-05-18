@@ -37,6 +37,7 @@ h1 {
   position: fixed;
   right: 20px;
   bottom: 20px;
+  z-index: 10000;
   display: grid;
   grid-template-columns: repeat(2, 30px); /* Две колонки */
   gap: 6px;
@@ -65,6 +66,7 @@ h1 {
   position: fixed;
   right: 20px;
   bottom: -10px; /* чуть ниже палитры */
+  z-index: 10001;
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
@@ -77,6 +79,7 @@ h1 {
   position: fixed;
   right: 1800px;
   bottom: 700px; /* чуть ниже палитры */
+  z-index: 10000;
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
@@ -85,10 +88,134 @@ h1 {
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
+#pencilToggle {
+  position: fixed;
+  left: 10px;
+  top: 58px;
+  z-index: 10000;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+#pencilToggle.active {
+  border-color: #000;
+  background: #fff2a8;
+}
+
+#pencilToggle:focus-visible {
+  outline: 2px solid #ff5a5f;
+  outline-offset: 2px;
+}
+
+#templatePanelToggle {
+  position: fixed;
+  left: 50px;
+  top: 58px;
+  z-index: 10000;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+#templatePanelToggle.active {
+  border-color: #000;
+  background: #e8f2ff;
+}
+
+.template-panel {
+  position: fixed;
+  left: 50px;
+  top: 98px;
+  z-index: 10000;
+  display: none;
+  width: 230px;
+  padding: 10px;
+  background: rgba(255,255,255,0.96);
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+  font-size: 13px;
+}
+
+.template-panel.open {
+  display: block;
+}
+
+.template-row {
+  margin-bottom: 8px;
+}
+
+.template-row input[type="file"] {
+  width: 100%;
+  font-size: 12px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.template-grid input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.template-row input[type="range"] {
+  width: 100%;
+}
+
+.template-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.template-actions button {
+  padding: 4px 7px;
+}
+
+#templateViewport {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+  display: none;
+}
+
+#overlayTemplate {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  z-index: auto !important;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  image-rendering: pixelated;
+  transform-origin: top left;
+}
+
 #reloadTimer {
   position: fixed;
   bottom: 10px;
   left: 50%;
+  z-index: 10000;
   transform: translateX(-50%);
   font-weight: bold;
   font-size: 14px;
@@ -102,6 +229,7 @@ h1 {
   position: fixed;
   bottom: 60px;
   left: 50%;
+  z-index: 10000;
   transform: translateX(-50%);
   background: #fafafa;
   padding: 12px;
@@ -128,16 +256,3 @@ h1 {
 #colorsChoice::-webkit-scrollbar-track {
   background: transparent;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
