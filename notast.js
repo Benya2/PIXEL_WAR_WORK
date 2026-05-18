@@ -1,7 +1,6 @@
 // ===== Imports =====
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
-import { getDatabase, ref, remove } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
+import { getDatabase, ref, remove, set, update, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 // ===== Firebase =====
@@ -15,7 +14,6 @@ const firebaseConfig = {
   appId: "1:461991610382:web:2a5ae293dde4a754c2d45f"
 };
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 const rtdb = getDatabase(app);
 const auth = getAuth(app);
 
@@ -85,6 +83,7 @@ let isShiftPressed = false;
 let cooldownInterval = null;
 const cooldownMaxMs = 60 * 1000;
 const pixelCooldownCostMs = 1 * 1000;
+let migrationStarted = false;
 
 function setPencilActive(active) {
   isPencilActive = active;
@@ -203,6 +202,39 @@ const pixelsCache = new Map();
 let markers = [];
 
 const colorNormalizeCtx = document.createElement('canvas').getContext('2d');
+
+function cellKey(x, y) {
+  return `${x}_${y}`;
+}
+
+async function migrateOldFirestorePixels() {
+  if (migrationStarted) return;
+  migrationStarted = true;
+  if (!confirm("Copy old Firestore pixels to Realtime Database?")) return;
+
+  try {
+    const { getFirestore, collection, getDocs } = await import("https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js");
+    const oldDb = getFirestore(app);
+    const snapshot = await getDocs(collection(oldDb, "pixels"));
+    const updates = {};
+
+    snapshot.forEach(docSnap => {
+      const d = docSnap.data();
+      const x = Number(d.x);
+      const y = Number(d.y);
+      const color = d.color;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !color) return;
+      updates[cellKey(x, y)] = { x, y, color };
+    });
+
+    await update(ref(rtdb, "pixels"), updates);
+    alert(`Migrated pixels: ${Object.keys(updates).length}`);
+  } catch (err) {
+    migrationStarted = false;
+    console.error(err);
+    alert("Migration failed. If Firestore quota is exceeded, try again after quota reset.");
+  }
+}
 
 function normalizeColor(color) {
   colorNormalizeCtx.fillStyle = '#ffffff';
@@ -331,14 +363,21 @@ function renderAll() {
   ctx.setTransform(1,0,0,1,0,0);
 }
 
-// ===== Firestore subscription =====
-onSnapshot(collection(db,"pixels"), snapshot=>{
+// ===== Realtime Database pixels =====
+onValue(ref(rtdb, "pixels"), snapshot => {
   pixelsCache.clear();
-  snapshot.forEach(docSnap=>{
-    const d = docSnap.data();
-    pixelsCache.set(`${d.x}-${d.y}`, d);
+  const data = snapshot.val() || {};
+  Object.values(data).forEach(d => {
+    if (!d) return;
+    const x = Number(d.x);
+    const y = Number(d.y);
+    const color = d.color;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !color) return;
+    pixelsCache.set(cellKey(x, y), { x, y, color });
   });
   renderAll();
+}, err => {
+  console.error(err);
 });
 
 function updateHoverFromPoint(clientX, clientY) {
@@ -416,7 +455,7 @@ async function placePixelWithHover(options = {}) {
   }
   const x = hoverCellX;
   const y = hoverCellY;
-  const pixelKey = `${x}-${y}`;
+  const pixelKey = cellKey(x, y);
   if (pendingPixelWrites.has(pixelKey)) return false;
   const placedPixel = pixelsCache.get(pixelKey);
   const previousPixel = placedPixel ? {...placedPixel} : null;
@@ -434,12 +473,12 @@ async function placePixelWithHover(options = {}) {
   }
   renderAll();
 
-  const pixelRef = doc(db,"pixels",pixelKey);
+  const pixelRef = ref(rtdb, `pixels/${pixelKey}`);
   try {
     if (selectedWhite) {
-      await deleteDoc(pixelRef);
+      await remove(pixelRef);
     } else {
-      await setDoc(pixelRef,{x,y,color:selectedColor});
+      await set(pixelRef,{x,y,color:selectedColor});
     }
     return true;
   } catch(err){
@@ -579,6 +618,9 @@ onAuthStateChanged(auth, user => {
     authButton.textContent = "Log Out";
     if (user.email === "logo100153@gmail.com") {
       adminPanel.style.display = "block";
+      if (new URLSearchParams(location.search).has("migratePixels")) {
+        migrateOldFirestorePixels();
+      }
     } else {
       adminPanel.style.display = "none";
     }
@@ -661,9 +703,9 @@ async function adminApplyPixels(mode) {
   parseCoords();
   let count = 0;
   for (const [x,y] of markers) {
-    const pixelRef = doc(db,"pixels",`${x}-${y}`);
-    if (mode === 'add') { await setDoc(pixelRef, {x,y,color:currentColor}); count++; }
-    else { await deleteDoc(pixelRef); count++; }
+    const pixelRef = ref(rtdb, `pixels/${cellKey(x, y)}`);
+    if (mode === 'add') { await set(pixelRef, {x,y,color:currentColor}); count++; }
+    else { await remove(pixelRef); count++; }
   }
   alert(`${mode==='add'?'Добавлено':'Удалено'} пикселей: ${count}`);
 }
@@ -674,8 +716,7 @@ removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
 // ===== Admin: clear map =====
 clearAllPixelsBtn.addEventListener('click', async ()=>{
   if(!auth.currentUser) return alert("Только админ!");
-  const snapshot = await getDocs(collection(db,"pixels"));
-  snapshot.forEach(doc=>deleteDoc(doc.ref));
+  await remove(ref(rtdb, "pixels"));
 });
 
 // ===== Admin: ban user =====
@@ -686,10 +727,6 @@ banUserBtn.addEventListener('click', ()=>{
   const userRef = ref(rtdb,'users/'+userId);
   remove(userRef).then(()=>alert("Пользователь забанен!")).catch(e=>console.error(e));
 });
-
-
-
-import { onDisconnect, set, onValue } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
 
 // Функция для отслеживания онлайн игроков
 function trackOnlinePlayer() {
