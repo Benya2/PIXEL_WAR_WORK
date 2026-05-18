@@ -8,6 +8,7 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWith
 const firebaseConfig = {
   apiKey: "AIzaSyCwy4jVn9JIwXuIXVycYAv9EdPGPkgIJvA",
   authDomain: "pixellox.firebaseapp.com",
+  databaseURL: "https://pixellox-default-rtdb.firebaseio.com",
   projectId: "pixellox",
   storageBucket: "pixellox.firebasestorage.app",
   messagingSenderId: "461991610382",
@@ -26,6 +27,9 @@ const game = document.getElementById('game');
 const ctx = game.getContext('2d');
 const cursor = document.getElementById('cursor');
 const reloadTimerEl = document.getElementById('reloadTimer');
+const cooldownTimerEl = document.getElementById('cooldownTimer');
+const pencilToggle = document.getElementById('pencilToggle');
+const onlinePlayersEl = document.getElementById('onlinePlayers');
 const adminPanel = document.getElementById('adminPanel');
 const clearAllPixelsBtn = document.getElementById('clearAllPixels');
 const banUserBtn = document.getElementById('banUser');
@@ -68,16 +72,64 @@ teleportBtn.addEventListener('click', () => {
 // без сглаживания
 ctx.imageSmoothingEnabled = false;
 
-const gridCellSize = 1;
+const gridCellSize = 10;
 game.width = 1200;
 game.height = 600;
 
 // ===== State =====
 let currentColor = "#000000";
 let canPlace = true;
-const reloadTime = 1;
+const pendingPixelWrites = new Set();
+let isPencilActive = false;
+let isShiftPressed = false;
+let cooldownInterval = null;
+const cooldownMaxMs = 60 * 1000;
+const pixelCooldownCostMs = 1 * 1000;
+
+function setPencilActive(active) {
+  isPencilActive = active;
+  if (pencilToggle) {
+    pencilToggle.classList.toggle("active", isPencilActive);
+    pencilToggle.setAttribute("aria-pressed", String(isPencilActive));
+  }
+}
+
+if (pencilToggle) {
+  pencilToggle.addEventListener("click", () => setPencilActive(!isPencilActive));
+  pencilToggle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setPencilActive(!isPencilActive);
+    }
+  });
+}
 
 // ===== Colors (30 как в PixelPlanet) =====
+function isTextInputTarget(target) {
+  return target && (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT"
+  );
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Shift" || e.repeat || isShiftPressed || isTextInputTarget(e.target)) return;
+  isShiftPressed = true;
+  setPencilActive(!isPencilActive);
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Shift") {
+    isShiftPressed = false;
+  }
+});
+
+window.addEventListener("blur", () => {
+  isShiftPressed = false;
+});
+
 const colors = [
   "rgb(255, 255, 255)", "rgb(96, 64, 40)", "rgb(228, 228, 228)", "rgb(245, 223, 176)",
   "rgb(196, 196, 196)", "rgb(255, 248, 137)", "rgb(136, 136, 136)", "rgb(229, 217, 0)",
@@ -118,7 +170,7 @@ const worldMap = new Image();
 worldMap.src = 'world.png';
 
 // Итоговый "мировой" размер для рендера (масштабированный)
-const SCALE_TILE = 1; // увеличение карты (поменяй 2/3/4 ...)
+const SCALE_TILE = 100; // увеличение карты (поменяй 2/3/4 ...)
 let WORLD_W = 20000 * SCALE_TILE;
 let WORLD_H = 20000 * SCALE_TILE;
 
@@ -149,6 +201,18 @@ function snapToGrid(wx, wy) {
 let hoverCellX = 0, hoverCellY = 0;
 const pixelsCache = new Map();
 let markers = [];
+
+const colorNormalizeCtx = document.createElement('canvas').getContext('2d');
+
+function normalizeColor(color) {
+  colorNormalizeCtx.fillStyle = '#ffffff';
+  colorNormalizeCtx.fillStyle = color || '#ffffff';
+  return colorNormalizeCtx.fillStyle.toLowerCase();
+}
+
+function isWhiteColor(color) {
+  return normalizeColor(color) === '#ffffff';
+}
 
 
 function updateCoordsDisplay() {
@@ -248,7 +312,7 @@ function renderAll() {
 
   // пиксели
   pixelsCache.forEach(d=>{
-    if (d.color !== "#FFFFFF") {
+    if (!isWhiteColor(d.color)) {
       ctx.fillStyle = d.color;
       ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
     }
@@ -277,6 +341,18 @@ onSnapshot(collection(db,"pixels"), snapshot=>{
   renderAll();
 });
 
+function updateHoverFromPoint(clientX, clientY) {
+  const [wx, wy] = screenToWorld(clientX, clientY);
+  [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
+  updateCoordsDisplay();
+  renderAll();
+}
+
+function tryPencilPlace() {
+  if (!isPencilActive || isPanning || !auth.currentUser) return;
+  placePixelWithHover({ silentAuth: true });
+}
+
 // ===== Mouse handling =====
 game.addEventListener('mousedown', (e)=>{
   if (e.button === 1 || e.button === 2 || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
@@ -296,13 +372,25 @@ game.addEventListener('mousemove', (e)=>{
     lastMouseX = e.clientX; lastMouseY = e.clientY;
     renderAll();
   }
-  const [wx, wy] = screenToWorld(e.clientX, e.clientY);
-  [hoverCellX, hoverCellY] = snapToGrid(wx, wy);
-  
-  updateCoordsDisplay();
-  
-  renderAll();
+  updateHoverFromPoint(e.clientX, e.clientY);
+  tryPencilPlace();
 });
+
+game.addEventListener('touchstart', (e)=>{
+  if (!isPencilActive || e.touches.length !== 1) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  updateHoverFromPoint(touch.clientX, touch.clientY);
+  tryPencilPlace();
+}, { passive: false });
+
+game.addEventListener('touchmove', (e)=>{
+  if (!isPencilActive || e.touches.length !== 1) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  updateHoverFromPoint(touch.clientX, touch.clientY);
+  tryPencilPlace();
+}, { passive: false });
 
 game.addEventListener('wheel', (e)=>{
   e.preventDefault();
@@ -317,27 +405,54 @@ game.addEventListener('wheel', (e)=>{
   camY = beforeY - (e.clientY - rect.top)/scale;
 
   
-const [wx2, wy2] = screenToWorld(e.clientX, e.clientY);
-[hoverCellX, hoverCellY] = snapToGrid(wx2, wy2);
-updateCoordsDisplay();
-
-  
-  renderAll();
+  updateHoverFromPoint(e.clientX, e.clientY);
 }, { passive: false });
 
 // ===== Drawing =====
-async function placePixelWithHover() {
-  if(!auth.currentUser) return alert("Login to draw!");
-  if(!canPlace) return;
-  canPlace = false;
+async function placePixelWithHover(options = {}) {
+  if(!auth.currentUser) {
+    if (!options.silentAuth) alert("Login to draw!");
+    return false;
+  }
   const x = hoverCellX;
   const y = hoverCellY;
-  const pixelRef = doc(db,"pixels",`${x}-${y}`);
-  try {
-    if (currentColor==="#FFFFFF") await deleteDoc(pixelRef);
-    else await setDoc(pixelRef,{x,y,color:currentColor});
-  } catch(err){ console.error(err); }
+  const pixelKey = `${x}-${y}`;
+  if (pendingPixelWrites.has(pixelKey)) return false;
+  const placedPixel = pixelsCache.get(pixelKey);
+  const previousPixel = placedPixel ? {...placedPixel} : null;
+  const selectedColor = currentColor;
+  const selectedWhite = isWhiteColor(selectedColor);
+  if (placedPixel && normalizeColor(placedPixel.color) === normalizeColor(selectedColor)) return false;
+  if (!placedPixel && selectedWhite) return false;
+  if(!isCooldownReady()) return false;
+  pendingPixelWrites.add(pixelKey);
   startReload();
+  if (selectedWhite) {
+    pixelsCache.delete(pixelKey);
+  } else {
+    pixelsCache.set(pixelKey,{x,y,color:selectedColor});
+  }
+  renderAll();
+
+  const pixelRef = doc(db,"pixels",pixelKey);
+  try {
+    if (selectedWhite) {
+      await deleteDoc(pixelRef);
+    } else {
+      await setDoc(pixelRef,{x,y,color:selectedColor});
+    }
+    return true;
+  } catch(err){
+    if (previousPixel) pixelsCache.set(pixelKey, previousPixel);
+    else pixelsCache.delete(pixelKey);
+    saveCooldownState(getCooldownMs() - pixelCooldownCostMs);
+    runCooldownTimer();
+    renderAll();
+    console.error(err);
+    return false;
+  } finally {
+    pendingPixelWrites.delete(pixelKey);
+  }
 }
 
 game.addEventListener('click', (e)=>{
@@ -348,18 +463,89 @@ game.addEventListener('click', (e)=>{
 if (cursor) cursor.style.display = 'none';
 
 // ===== Cooldown =====
-function startReload(){
-  let t = reloadTime;
-  reloadTimerEl.innerText = `Reload: ${t} sec`;
-  const interval = setInterval(()=>{
-    t--;
-    if(t<=0){
-      clearInterval(interval);
-      canPlace = true;
-      reloadTimerEl.innerText = "Ready!";
-    } else reloadTimerEl.innerText = `Reload: ${t} sec`;
-  },1000);
+function formatCooldown(ms) {
+  const totalSeconds = ms > 0 ? Math.ceil(ms / 1000) : 0;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
+
+function getCooldownStorageKey() {
+  const userId = auth.currentUser ? auth.currentUser.uid : "guest";
+  return `pixel-war-cooldown-stack:${userId}`;
+}
+
+function getCooldownState() {
+  const now = Date.now();
+  const fallbackState = { cooldownMs: 0, updatedAt: now };
+  const rawState = localStorage.getItem(getCooldownStorageKey());
+  if (!rawState) return fallbackState;
+
+  try {
+    const state = JSON.parse(rawState);
+    const cooldownMs = Number(state.cooldownMs);
+    const updatedAt = Number(state.updatedAt);
+    if (Number.isFinite(cooldownMs) && Number.isFinite(updatedAt)) {
+      return {
+        cooldownMs: clamp(cooldownMs - (now - updatedAt), 0, cooldownMaxMs),
+        updatedAt: now
+      };
+    }
+  } catch (err) {
+    return fallbackState;
+  }
+
+  return fallbackState;
+}
+
+function saveCooldownState(cooldownMs) {
+  localStorage.setItem(getCooldownStorageKey(), JSON.stringify({
+    cooldownMs: clamp(cooldownMs, 0, cooldownMaxMs),
+    updatedAt: Date.now()
+  }));
+}
+
+function getCooldownMs() {
+  return getCooldownState().cooldownMs;
+}
+
+function updateCooldownDisplay() {
+  const cooldownMs = getCooldownMs();
+  canPlace = cooldownMs <= cooldownMaxMs - pixelCooldownCostMs;
+  const cooldownText = formatCooldown(cooldownMs);
+  if (reloadTimerEl) {
+    reloadTimerEl.innerText = `Cooldown: ${cooldownText} / 1:00`;
+  }
+  if (cooldownTimerEl) {
+    cooldownTimerEl.innerText = cooldownText;
+  }
+}
+
+function runCooldownTimer() {
+  if (cooldownInterval) clearInterval(cooldownInterval);
+  updateCooldownDisplay();
+  if (getCooldownMs() <= 0) return;
+
+  cooldownInterval = setInterval(() => {
+    updateCooldownDisplay();
+    if (getCooldownMs() <= 0) {
+      clearInterval(cooldownInterval);
+      cooldownInterval = null;
+    }
+  }, 500);
+}
+
+function isCooldownReady() {
+  updateCooldownDisplay();
+  return getCooldownMs() <= cooldownMaxMs - pixelCooldownCostMs;
+}
+
+function startReload(){
+  saveCooldownState(getCooldownMs() + pixelCooldownCostMs);
+  runCooldownTimer();
+}
+
+runCooldownTimer();
 
 // ===== Auth button =====
 authButton.addEventListener('click', async () => {
@@ -400,6 +586,7 @@ onAuthStateChanged(auth, user => {
     authButton.textContent = "Log In";
     adminPanel.style.display = "none";
   }
+  runCooldownTimer();
 });
 
 // ===== Admin: coords input + preview =====
@@ -502,7 +689,7 @@ banUserBtn.addEventListener('click', ()=>{
 
 
 
-import { onDisconnect, set } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
+import { onDisconnect, set, onValue } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
 
 // Функция для отслеживания онлайн игроков
 function trackOnlinePlayer() {
@@ -548,17 +735,83 @@ updateOnlinePlayers();
 
 
 const overlay = document.getElementById("overlayTemplate");
+const templateViewport = document.getElementById("templateViewport");
+const templatePanelToggle = document.getElementById("templatePanelToggle");
+const templateControls = document.getElementById("templateControls");
 const fileInput = document.getElementById("templateFile");
 const opacityRange = document.getElementById("opacityRange");
 const coordX = document.getElementById("coordX");
 const coordY = document.getElementById("coordY");
 const applyCoordsBtn = document.getElementById("applyCoords");
 const toggleBtn = document.getElementById("toggleBtn");
+const clearTemplateBtn = document.getElementById("clearTemplate");
+const templateStorageKey = "pixel-war-template";
 
 let templateX = 0;
 let templateY = 0;
 let templateOpacity = 0.5;
 let templateVisible = true;
+
+function saveTemplateState() {
+  try {
+    localStorage.setItem(templateStorageKey, JSON.stringify({
+      src: overlay.getAttribute("src") || "",
+      x: templateX,
+      y: templateY,
+      opacity: templateOpacity,
+      visible: templateVisible
+    }));
+  } catch (err) {
+    console.warn("Template is too large to save locally.");
+  }
+}
+
+function syncTemplateControls() {
+  coordX.value = String(templateX);
+  coordY.value = String(templateY);
+  opacityRange.value = String(templateOpacity);
+  overlay.style.opacity = templateOpacity;
+  toggleBtn.textContent = templateVisible ? "Hide" : "Show";
+}
+
+function setTemplatePanelOpen(open) {
+  templateControls.classList.toggle("open", open);
+  templatePanelToggle.classList.toggle("active", open);
+  templatePanelToggle.setAttribute("aria-expanded", String(open));
+}
+
+function setTemplateSrc(src) {
+  if (src) overlay.src = src;
+  else overlay.removeAttribute("src");
+  templateVisible = !!src && templateVisible;
+  updateTemplatePosition();
+}
+
+function loadTemplateState() {
+  const rawState = localStorage.getItem(templateStorageKey);
+  if (!rawState) {
+    syncTemplateControls();
+    updateTemplatePosition();
+    return;
+  }
+
+  try {
+    const state = JSON.parse(rawState);
+    templateX = Number.isFinite(Number(state.x)) ? Number(state.x) : 0;
+    templateY = Number.isFinite(Number(state.y)) ? Number(state.y) : 0;
+    templateOpacity = Number.isFinite(Number(state.opacity)) ? Number(state.opacity) : 0.5;
+    templateVisible = state.visible !== false;
+    syncTemplateControls();
+    setTemplateSrc(state.src || "");
+  } catch (err) {
+    syncTemplateControls();
+    updateTemplatePosition();
+  }
+}
+
+templatePanelToggle.addEventListener("click", () => {
+  setTemplatePanelOpen(!templateControls.classList.contains("open"));
+});
 
 // загрузка картинки
 fileInput.addEventListener("change", (e)=>{
@@ -566,44 +819,81 @@ fileInput.addEventListener("change", (e)=>{
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (event)=>{
-    overlay.src = event.target.result;
-    overlay.style.display = "block";
+    templateVisible = true;
+    setTemplateSrc(event.target.result);
+    syncTemplateControls();
+    saveTemplateState();
   };
   reader.readAsDataURL(file);
 });
 
 // прозрачность
 opacityRange.addEventListener("input", ()=>{
-  templateOpacity = opacityRange.value;
-  overlay.style.opacity = templateOpacity;
+  templateOpacity = Number(opacityRange.value);
+  updateTemplatePosition();
+  saveTemplateState();
 });
 
 // координаты
-applyCoordsBtn.addEventListener("click", ()=>{
+function applyTemplateCoords() {
   templateX = parseInt(coordX.value) || 0;
   templateY = parseInt(coordY.value) || 0;
   updateTemplatePosition();
-});
+  saveTemplateState();
+}
+
+applyCoordsBtn.addEventListener("click", applyTemplateCoords);
+coordX.addEventListener("change", applyTemplateCoords);
+coordY.addEventListener("change", applyTemplateCoords);
 
 // показать/скрыть
 toggleBtn.addEventListener("click", ()=>{
   templateVisible = !templateVisible;
-  overlay.style.display = templateVisible ? "block" : "none";
+  syncTemplateControls();
+  updateTemplatePosition();
+  saveTemplateState();
+});
+
+clearTemplateBtn.addEventListener("click", () => {
+  overlay.removeAttribute("src");
+  fileInput.value = "";
+  templateVisible = false;
+  localStorage.removeItem(templateStorageKey);
+  syncTemplateControls();
+  updateTemplatePosition();
 });
 
 // обновление позиции
 function updateTemplatePosition(){
-  overlay.style.transform = `translate(${(-camX * scale) + templateX}px, ${(-camY * scale) + templateY}px) scale(${scale})`;
+  const rect = game.getBoundingClientRect();
+  templateViewport.style.left = `${rect.left}px`;
+  templateViewport.style.top = `${rect.top}px`;
+  templateViewport.style.width = `${rect.width}px`;
+  templateViewport.style.height = `${rect.height}px`;
+
+  overlay.style.opacity = templateOpacity;
+  if (!overlay.getAttribute("src") || !templateVisible) {
+    templateViewport.style.display = "none";
+    overlay.style.display = "none";
+    return;
+  }
+
+  const screenX = (templateX * gridCellSize - camX) * scale;
+  const screenY = (templateY * gridCellSize - camY) * scale;
+  templateViewport.style.display = "block";
+  overlay.style.display = "block";
+  overlay.style.transform = `translate(${screenX}px, ${screenY}px) scale(${scale * gridCellSize})`;
   overlay.style.transformOrigin = "top left";
 }
 
 // перерисовка вместе с картой
+overlay.addEventListener("load", updateTemplatePosition);
+window.addEventListener("resize", updateTemplatePosition);
+
 const oldRenderAll = renderAll;
 renderAll = function(){
   oldRenderAll();
-  if (overlay.src) updateTemplatePosition();
+  updateTemplatePosition();
 };
 
-
-
-
+loadTemplateState();
