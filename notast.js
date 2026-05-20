@@ -115,7 +115,7 @@ let isPencilActive = false;
 let isShiftPressed = false;
 let cooldownInterval = null;
 const cooldownMaxMs = 60 * 1000;
-const pixelCooldownCostMs = 300;
+const pixelCooldownCostMs = 400;
 let migrationStarted = false;
 let isPixelInspectActive = false;
 let lastInspectedPixelKey = "";
@@ -883,10 +883,9 @@ if (cursor) cursor.style.display = 'none';
 
 // ===== Cooldown =====
 function formatCooldown(ms) {
-  const totalSeconds = ms > 0 ? Math.ceil(ms / 1000) : 0;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds}`;
+  if (ms >= cooldownMaxMs) return "1:00";
+  const seconds = ms > 0 ? Math.ceil(ms / 10) / 100 : 0;
+  return seconds.toFixed(2);
 }
 
 function getCooldownStorageKey() {
@@ -951,7 +950,7 @@ function runCooldownTimer() {
       clearInterval(cooldownInterval);
       cooldownInterval = null;
     }
-  }, 500);
+  }, 250);
 }
 
 function isCooldownReady() {
