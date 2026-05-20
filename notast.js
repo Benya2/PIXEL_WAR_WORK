@@ -1,7 +1,7 @@
 // ===== Imports =====
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
 import { getDatabase, ref, remove, set, update, get, runTransaction, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, updateEmail, EmailAuthProvider, reauthenticateWithCredential, sendEmailVerification } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 // ===== Firebase =====
 const firebaseConfig = {
@@ -63,7 +63,6 @@ const profileForm = document.getElementById('profileForm');
 const profileNickInput = document.getElementById('profileNick');
 const profileEmailInput = document.getElementById('profileEmail');
 const profilePasswordInput = document.getElementById('profilePassword');
-const verifyEmailButton = document.getElementById('verifyEmailButton');
 const logoutButton = document.getElementById('logoutButton');
 const authMessage = document.getElementById('authMessage');
 const coordsInput = document.getElementById('coordsInput');
@@ -123,6 +122,8 @@ let isShiftPressed = false;
 let cooldownInterval = null;
 const cooldownMaxMs = 60 * 1000;
 const pixelCooldownCostMs = 400;
+const cooldownFullBlockMs = 1000;
+const cooldownTimerTickMs = 100;
 let migrationStarted = false;
 let isPixelInspectActive = false;
 let lastInspectedPixelKey = "";
@@ -135,26 +136,105 @@ let currentUserProfile = null;
 const userProfileCache = new Map();
 let drawingActivityUnsubscribe = null;
 let drawingActivityRequestId = 0;
+const drawingDeviceStorageKey = "pixel-war-device-id";
+const currentDeviceId = getOrCreateDeviceId();
+let drawingDeviceAllowed = false;
+let drawingDeviceClaimPromise = null;
+let drawingDeviceUnsubscribe = null;
+let deviceCooldownKeyPromise = null;
 
-function isVerifiedUser(user = auth.currentUser) {
-  return !!user && !!user.emailVerified;
+function getOrCreateDeviceId() {
+  let deviceId = localStorage.getItem(drawingDeviceStorageKey);
+  if (!deviceId) {
+    deviceId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(drawingDeviceStorageKey, deviceId);
+  }
+  return deviceId;
 }
 
-function requireVerifiedUser(options = {}) {
+function getDeviceFingerprintSource() {
+  return [
+    screen.width,
+    screen.height,
+    screen.colorDepth,
+    window.devicePixelRatio || 1,
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+    navigator.platform || "",
+    navigator.language || "",
+    Array.isArray(navigator.languages) ? navigator.languages.join(",") : "",
+    navigator.hardwareConcurrency || "",
+    navigator.maxTouchPoints || 0
+  ].join("|");
+}
+
+async function sha256Hex(value) {
+  if (!crypto.subtle) return safeKey(value).slice(0, 80);
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function getDeviceCooldownKey() {
+  if (!deviceCooldownKeyPromise) {
+    deviceCooldownKeyPromise = sha256Hex(getDeviceFingerprintSource());
+  }
+  return deviceCooldownKeyPromise;
+}
+
+function watchDrawingDevice(user) {
+  if (drawingDeviceUnsubscribe) drawingDeviceUnsubscribe();
+  drawingDeviceUnsubscribe = null;
+  drawingDeviceAllowed = false;
+  if (!user) return;
+
+  drawingDeviceUnsubscribe = onValue(ref(rtdb, `userProfiles/${user.uid}/drawingDevice`), snapshot => {
+    const device = snapshot.val();
+    drawingDeviceAllowed = !device || device.id === currentDeviceId;
+  });
+}
+
+async function claimDrawingDevice(user, options = {}) {
+  if (!user) return false;
+  if (drawingDeviceAllowed) return true;
+  if (drawingDeviceClaimPromise) return drawingDeviceClaimPromise;
+
+  drawingDeviceClaimPromise = (async () => {
+    const deviceRef = ref(rtdb, `userProfiles/${user.uid}/drawingDevice`);
+    await runTransaction(deviceRef, current => {
+      if (!current || current.id === currentDeviceId) {
+        return {
+          id: currentDeviceId,
+          nick: getUserName(user),
+          email: user.email || "",
+          claimedAt: current?.claimedAt || Date.now(),
+          lastSeen: Date.now()
+        };
+      }
+      return current;
+    });
+
+    const snapshot = await get(deviceRef);
+    const device = snapshot.val();
+    drawingDeviceAllowed = !!device && device.id === currentDeviceId;
+    if (!drawingDeviceAllowed && !options.silent) {
+      alert("This account can draw only on its first device.");
+    }
+    return drawingDeviceAllowed;
+  })();
+
+  try {
+    return await drawingDeviceClaimPromise;
+  } finally {
+    drawingDeviceClaimPromise = null;
+  }
+}
+
+async function requireDrawingDevice(options = {}) {
   const user = auth.currentUser;
   if (!user) {
     if (!options.silent) alert("Login to draw!");
     return false;
   }
-  if (!isVerifiedUser(user)) {
-    if (!options.silent) {
-      alert("Confirm your email first. Check your mailbox and then login again.");
-      authPanel?.classList.add("open");
-      setAuthMode("profile");
-    }
-    return false;
-  }
-  return true;
+  return claimDrawingDevice(user, options);
 }
 
 function setPencilActive(active) {
@@ -258,6 +338,14 @@ let cameraSaveTimeout = null;
 
 let isPanning = false;
 let lastMouseX = 0, lastMouseY = 0;
+let touchMode = "";
+let touchStartX = 0;
+let touchStartY = 0;
+let lastTouchX = 0;
+let lastTouchY = 0;
+let touchMoved = false;
+let lastPinchDistance = 0;
+const touchPanThreshold = 8;
 
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
@@ -311,6 +399,30 @@ function screenToWorld(sx, sy) {
   const y = (sy - rect.top)/scale + camY;
   return [x, y];
 }
+
+function getTouchCenter(touches) {
+  const a = touches[0];
+  const b = touches[1];
+  return {
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2
+  };
+}
+
+function getTouchDistance(touches) {
+  const a = touches[0];
+  const b = touches[1];
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+function zoomAtClientPoint(clientX, clientY, nextScale) {
+  const [beforeX, beforeY] = screenToWorld(clientX, clientY);
+  const rect = game.getBoundingClientRect();
+  scale = clamp(nextScale, MIN_SCALE, MAX_SCALE);
+  camX = beforeX - (clientX - rect.left) / scale;
+  camY = beforeY - (clientY - rect.top) / scale;
+}
+
 function snapToGrid(wx, wy) {
   return [
     Math.floor(wx / gridCellSize) * gridCellSize,
@@ -864,34 +976,117 @@ game.addEventListener('mousemove', (e)=>{
 });
 
 game.addEventListener('touchstart', (e)=>{
-  if (e.touches.length !== 1) return;
   e.preventDefault();
+
+  if (e.touches.length === 2) {
+    touchMode = "pinch";
+    lastPinchDistance = getTouchDistance(e.touches);
+    const center = getTouchCenter(e.touches);
+    updateHoverFromPoint(center.x, center.y);
+    return;
+  }
+
+  if (e.touches.length !== 1) return;
   const touch = e.touches[0];
+  touchMode = isPencilActive ? "draw" : "pan";
+  touchStartX = lastTouchX = touch.clientX;
+  touchStartY = lastTouchY = touch.clientY;
+  touchMoved = false;
   updateHoverFromPoint(touch.clientX, touch.clientY);
-  if (stopTemplateFollow()) return;
-  if (!isPencilActive) return;
-  tryPencilPlace();
+
+  if (touchMode === "draw") {
+    if (stopTemplateFollow()) return;
+    tryPencilPlace();
+  }
 }, { passive: false });
 
 game.addEventListener('touchmove', (e)=>{
-  if (!isPencilActive || e.touches.length !== 1) return;
   e.preventDefault();
+
+  if (e.touches.length === 2) {
+    touchMode = "pinch";
+    const distance = getTouchDistance(e.touches);
+    const center = getTouchCenter(e.touches);
+    if (lastPinchDistance > 0 && distance > 0) {
+      zoomAtClientPoint(center.x, center.y, scale * (distance / lastPinchDistance));
+      lastPinchDistance = distance;
+      scheduleCameraSave();
+      updateHoverFromPoint(center.x, center.y);
+      renderAll();
+    }
+    return;
+  }
+
+  if (e.touches.length !== 1) return;
   const touch = e.touches[0];
+  const totalDx = touch.clientX - touchStartX;
+  const totalDy = touch.clientY - touchStartY;
+  if (Math.hypot(totalDx, totalDy) > touchPanThreshold) {
+    touchMoved = true;
+  }
+
+  if (touchMode === "draw") {
+    updateHoverFromPoint(touch.clientX, touch.clientY);
+    tryPencilPlace();
+    return;
+  }
+
+  const dx = touch.clientX - lastTouchX;
+  const dy = touch.clientY - lastTouchY;
+  camX -= dx / scale;
+  camY -= dy / scale;
+  lastTouchX = touch.clientX;
+  lastTouchY = touch.clientY;
+  scheduleCameraSave();
   updateHoverFromPoint(touch.clientX, touch.clientY);
-  tryPencilPlace();
+  renderAll();
+}, { passive: false });
+
+game.addEventListener('touchend', (e)=>{
+  e.preventDefault();
+
+  if (e.touches.length === 1) {
+    const touch = e.touches[0];
+    touchMode = isPencilActive ? "draw" : "pan";
+    touchStartX = lastTouchX = touch.clientX;
+    touchStartY = lastTouchY = touch.clientY;
+    touchMoved = false;
+    lastPinchDistance = 0;
+    updateHoverFromPoint(touch.clientX, touch.clientY);
+    return;
+  }
+
+  if (touchMode === "pan" && !touchMoved) {
+    updateHoverFromPoint(touchStartX, touchStartY);
+    if (!stopTemplateFollow()) {
+      placePixelWithHover();
+    }
+  }
+
+  if (touchMode === "pan" || touchMode === "pinch") {
+    saveCameraStateNow();
+  }
+
+  touchMode = "";
+  touchMoved = false;
+  lastPinchDistance = 0;
+}, { passive: false });
+
+game.addEventListener('touchcancel', (e)=>{
+  e.preventDefault();
+  if (touchMode === "pan" || touchMode === "pinch") saveCameraStateNow();
+  touchMode = "";
+  touchMoved = false;
+  lastPinchDistance = 0;
 }, { passive: false });
 
 game.addEventListener('wheel', (e)=>{
   e.preventDefault();
   const zoomFactor = 1.1;
-  const [beforeX, beforeY] = screenToWorld(e.clientX, e.clientY);
   const dir = e.deltaY < 0 ? 1 : -1;
   const newScale = clamp(scale * (dir > 0 ? zoomFactor : 1/zoomFactor), MIN_SCALE, MAX_SCALE);
   if (newScale === scale) return;
-  scale = newScale;
-  const rect = game.getBoundingClientRect();
-  camX = beforeX - (e.clientX - rect.left)/scale;
-  camY = beforeY - (e.clientY - rect.top)/scale;
+  zoomAtClientPoint(e.clientX, e.clientY, newScale);
 
   scheduleCameraSave();
   updateHoverFromPoint(e.clientX, e.clientY);
@@ -899,7 +1094,12 @@ game.addEventListener('wheel', (e)=>{
 
 // ===== Drawing =====
 async function placePixelWithHover(options = {}) {
-  if (!requireVerifiedUser({ silent: options.silentAuth })) return false;
+  const user = auth.currentUser;
+  if (!user) {
+    if (!options.silentAuth) alert("Login to draw!");
+    return false;
+  }
+
   const x = hoverCellX;
   const y = hoverCellY;
   const pixelKey = cellKey(x, y);
@@ -915,9 +1115,10 @@ async function placePixelWithHover(options = {}) {
   const selectedWhite = isWhiteColor(selectedColor);
   if (placedPixel && normalizeColor(placedPixel.color) === normalizeColor(selectedColor)) return false;
   if (!placedPixel && selectedWhite) return false;
-  if(!isCooldownReady()) return false;
+  if (!isCooldownReady()) return false;
+  if (!drawingDeviceAllowed && !await claimDrawingDevice(user, { silent: options.silentAuth })) return false;
+  if (!tryStartCooldown()) return false;
   pendingPixelWrites.add(pixelKey);
-  startReload();
   if (selectedWhite) {
     pixelsCache.delete(pixelKey);
   } else {
@@ -975,14 +1176,17 @@ if (cursor) cursor.style.display = 'none';
 
 // ===== Cooldown =====
 function formatCooldown(ms) {
-  if (ms >= cooldownMaxMs) return "1:00";
+  if (isCooldownFull(ms)) return "1:00";
   const seconds = ms > 0 ? Math.ceil(ms / 10) / 100 : 0;
   return seconds.toFixed(2);
 }
 
+function isCooldownFull(cooldownMs = getCooldownMs()) {
+  return cooldownMs >= cooldownMaxMs - cooldownFullBlockMs;
+}
+
 function getCooldownStorageKey() {
-  const userId = auth.currentUser ? auth.currentUser.uid : "guest";
-  return `pixel-war-cooldown-stack:${userId}`;
+  return `pixel-war-cooldown-stack:device:${currentDeviceId}`;
 }
 
 function getCooldownState() {
@@ -1008,6 +1212,15 @@ function getCooldownState() {
   return fallbackState;
 }
 
+function getCooldownMsFromRemoteState(state) {
+  const now = Date.now();
+  if (!state) return 0;
+  const cooldownMs = Number(state.cooldownMs);
+  const updatedAt = Number(state.updatedAt);
+  if (!Number.isFinite(cooldownMs) || !Number.isFinite(updatedAt)) return 0;
+  return clamp(cooldownMs - (now - updatedAt), 0, cooldownMaxMs);
+}
+
 function saveCooldownState(cooldownMs) {
   localStorage.setItem(getCooldownStorageKey(), JSON.stringify({
     cooldownMs: clamp(cooldownMs, 0, cooldownMaxMs),
@@ -1019,9 +1232,8 @@ function getCooldownMs() {
   return getCooldownState().cooldownMs;
 }
 
-function updateCooldownDisplay() {
-  const cooldownMs = getCooldownMs();
-  canPlace = cooldownMs <= cooldownMaxMs - pixelCooldownCostMs;
+function updateCooldownDisplay(cooldownMs = getCooldownMs()) {
+  canPlace = !isCooldownFull(cooldownMs);
   const cooldownText = formatCooldown(cooldownMs);
   if (reloadTimerEl) {
     reloadTimerEl.innerText = `Cooldown: ${cooldownText} / 1:00`;
@@ -1042,17 +1254,30 @@ function runCooldownTimer() {
       clearInterval(cooldownInterval);
       cooldownInterval = null;
     }
-  }, 250);
+  }, cooldownTimerTickMs);
 }
 
 function isCooldownReady() {
-  updateCooldownDisplay();
-  return getCooldownMs() <= cooldownMaxMs - pixelCooldownCostMs;
+  const cooldownMs = getCooldownMs();
+  updateCooldownDisplay(cooldownMs);
+  return !isCooldownFull(cooldownMs);
 }
+
+window.addEventListener("storage", (event) => {
+  if (event.key === getCooldownStorageKey()) {
+    runCooldownTimer();
+  }
+});
 
 function startReload(){
   saveCooldownState(getCooldownMs() + pixelCooldownCostMs);
   runCooldownTimer();
+}
+
+function tryStartCooldown() {
+  if (!isCooldownReady()) return false;
+  startReload();
+  return true;
 }
 
 runCooldownTimer();
@@ -1156,8 +1381,6 @@ function setAuthMode(mode) {
 
   if (authTabs) authTabs.style.display = user ? "none" : "grid";
   logoutButton?.classList.toggle("visible", !!user);
-  verifyEmailButton?.classList.toggle("visible", !!user && !isVerifiedUser(user));
-
   if (user && profileNickInput && profileEmailInput) {
     profileNickInput.value = getUserName(user);
     profileEmailInput.value = user.email || currentUserProfile?.email || "";
@@ -1197,36 +1420,15 @@ if (logoutButton) {
   });
 }
 
-if (verifyEmailButton) {
-  verifyEmailButton.addEventListener("click", async () => {
-    const user = auth.currentUser;
-    if (!user) return setAuthMessage("Login first.", true);
-    try {
-      await sendEmailVerification(user);
-      setAuthMessage("Verification email sent. Open your mailbox and confirm it.");
-    } catch (err) {
-      setAuthMessage(err.message, true);
-    }
-  });
-}
-
 if (loginForm) {
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     setAuthMessage("Logging in...");
     try {
       await signInWithEmailAndPassword(auth, loginEmailInput.value.trim(), loginPasswordInput.value);
-      if (auth.currentUser) {
-        await auth.currentUser.reload();
-      }
       loginPasswordInput.value = "";
-      if (isVerifiedUser(auth.currentUser)) {
-        setAuthMessage("Logged in.");
-        authPanel?.classList.remove("open");
-      } else {
-        setAuthMessage("Email is not confirmed yet. Check your mailbox.", true);
-        setAuthMode("profile");
-      }
+      setAuthMessage("Logged in.");
+      authPanel?.classList.remove("open");
     } catch (err) {
       setAuthMessage(err.message, true);
     }
@@ -1247,10 +1449,9 @@ if (registerForm) {
       await updateProfile(credential.user, { displayName: nick });
       await ensureUserProfile(credential.user, nick);
       await updateStatsNick(credential.user, nick);
-      await sendEmailVerification(credential.user);
       registerPasswordInput.value = "";
       if (registerCodeInput) registerCodeInput.value = "";
-      setAuthMessage("Account created. Verification email sent. Confirm your email before drawing.");
+      setAuthMessage("Account created. You can draw now.");
       setAuthMode("profile");
     } catch (err) {
       setAuthMessage(err.message, true);
@@ -1283,9 +1484,6 @@ if (profileForm) {
         const credential = EmailAuthProvider.credential(currentEmail, profilePasswordInput.value);
         await reauthenticateWithCredential(user, credential);
         await updateEmail(user, nextEmail);
-        if (auth.currentUser) {
-          await sendEmailVerification(auth.currentUser);
-        }
       }
 
       await saveUserProfile(auth.currentUser || user, { nick, email: nextEmail });
@@ -1294,7 +1492,7 @@ if (profileForm) {
       renderAuthState(auth.currentUser || user);
       trackOnlinePlayer(auth.currentUser || user);
       watchCurrentUserBan(auth.currentUser || user);
-      setAuthMessage(nextEmail !== currentEmail ? "Profile saved. Confirm your new email before drawing." : "Profile saved.");
+      setAuthMessage("Profile saved.");
     } catch (err) {
       setAuthMessage(err.message, true);
     }
@@ -1306,6 +1504,8 @@ onAuthStateChanged(auth, async user => {
   if (user) {
     await ensureUserProfile(user);
     watchCurrentUserProfile(user);
+    watchDrawingDevice(user);
+    claimDrawingDevice(user, { silent: true }).catch(console.error);
     trackOnlinePlayer(user);
     if (isAdminUser(user)) {
       adminPanel.style.display = "block";
@@ -1318,6 +1518,7 @@ onAuthStateChanged(auth, async user => {
     }
   } else {
     watchCurrentUserProfile(null);
+    watchDrawingDevice(null);
     adminPanel.style.display = "none";
     toggleDrawingActivityPanel(false);
   }
@@ -1438,7 +1639,7 @@ removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
 
 // Функция для отслеживания онлайн игроков
 function isAdminUser(user = auth.currentUser) {
-  return !!user && user.email === "logo100153@gmail.com" && !!user.emailVerified;
+  return !!user && user.email === "logo100153@gmail.com";
 }
 
 function getBanPaths(target) {
