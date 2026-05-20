@@ -1,7 +1,7 @@
 // ===== Imports =====
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
 import { getDatabase, ref, remove, set, update, get, runTransaction, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-database.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, updateEmail, EmailAuthProvider, reauthenticateWithCredential, sendEmailVerification } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 // ===== Firebase =====
 const firebaseConfig = {
@@ -16,6 +16,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const rtdb = getDatabase(app);
 const auth = getAuth(app);
+const registrationCode = "PIXEL2026";
 
 // ===== DOM =====
 const coordsDisplayEl = document.getElementById('coordsDisplay');
@@ -57,10 +58,12 @@ const registerForm = document.getElementById('registerForm');
 const registerNickInput = document.getElementById('registerNick');
 const registerEmailInput = document.getElementById('registerEmail');
 const registerPasswordInput = document.getElementById('registerPassword');
+const registerCodeInput = document.getElementById('registerCode');
 const profileForm = document.getElementById('profileForm');
 const profileNickInput = document.getElementById('profileNick');
 const profileEmailInput = document.getElementById('profileEmail');
 const profilePasswordInput = document.getElementById('profilePassword');
+const verifyEmailButton = document.getElementById('verifyEmailButton');
 const logoutButton = document.getElementById('logoutButton');
 const authMessage = document.getElementById('authMessage');
 const coordsInput = document.getElementById('coordsInput');
@@ -132,6 +135,27 @@ let currentUserProfile = null;
 const userProfileCache = new Map();
 let drawingActivityUnsubscribe = null;
 let drawingActivityRequestId = 0;
+
+function isVerifiedUser(user = auth.currentUser) {
+  return !!user && !!user.emailVerified;
+}
+
+function requireVerifiedUser(options = {}) {
+  const user = auth.currentUser;
+  if (!user) {
+    if (!options.silent) alert("Login to draw!");
+    return false;
+  }
+  if (!isVerifiedUser(user)) {
+    if (!options.silent) {
+      alert("Confirm your email first. Check your mailbox and then login again.");
+      authPanel?.classList.add("open");
+      setAuthMode("profile");
+    }
+    return false;
+  }
+  return true;
+}
 
 function setPencilActive(active) {
   isPencilActive = active;
@@ -875,10 +899,7 @@ game.addEventListener('wheel', (e)=>{
 
 // ===== Drawing =====
 async function placePixelWithHover(options = {}) {
-  if(!auth.currentUser) {
-    if (!options.silentAuth) alert("Login to draw!");
-    return false;
-  }
+  if (!requireVerifiedUser({ silent: options.silentAuth })) return false;
   const x = hoverCellX;
   const y = hoverCellY;
   const pixelKey = cellKey(x, y);
@@ -1135,6 +1156,7 @@ function setAuthMode(mode) {
 
   if (authTabs) authTabs.style.display = user ? "none" : "grid";
   logoutButton?.classList.toggle("visible", !!user);
+  verifyEmailButton?.classList.toggle("visible", !!user && !isVerifiedUser(user));
 
   if (user && profileNickInput && profileEmailInput) {
     profileNickInput.value = getUserName(user);
@@ -1175,15 +1197,36 @@ if (logoutButton) {
   });
 }
 
+if (verifyEmailButton) {
+  verifyEmailButton.addEventListener("click", async () => {
+    const user = auth.currentUser;
+    if (!user) return setAuthMessage("Login first.", true);
+    try {
+      await sendEmailVerification(user);
+      setAuthMessage("Verification email sent. Open your mailbox and confirm it.");
+    } catch (err) {
+      setAuthMessage(err.message, true);
+    }
+  });
+}
+
 if (loginForm) {
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     setAuthMessage("Logging in...");
     try {
       await signInWithEmailAndPassword(auth, loginEmailInput.value.trim(), loginPasswordInput.value);
+      if (auth.currentUser) {
+        await auth.currentUser.reload();
+      }
       loginPasswordInput.value = "";
-      setAuthMessage("Logged in.");
-      authPanel?.classList.remove("open");
+      if (isVerifiedUser(auth.currentUser)) {
+        setAuthMessage("Logged in.");
+        authPanel?.classList.remove("open");
+      } else {
+        setAuthMessage("Email is not confirmed yet. Check your mailbox.", true);
+        setAuthMode("profile");
+      }
     } catch (err) {
       setAuthMessage(err.message, true);
     }
@@ -1195,15 +1238,20 @@ if (registerForm) {
     e.preventDefault();
     const nick = normalizeNick(registerNickInput.value);
     if (!nick) return setAuthMessage("Enter a nick.", true);
+    if ((registerCodeInput?.value || "").trim() !== registrationCode) {
+      return setAuthMessage("Wrong registration code.", true);
+    }
     setAuthMessage("Creating account...");
     try {
       const credential = await createUserWithEmailAndPassword(auth, registerEmailInput.value.trim(), registerPasswordInput.value);
       await updateProfile(credential.user, { displayName: nick });
       await ensureUserProfile(credential.user, nick);
       await updateStatsNick(credential.user, nick);
+      await sendEmailVerification(credential.user);
       registerPasswordInput.value = "";
-      setAuthMessage("Account created.");
-      authPanel?.classList.remove("open");
+      if (registerCodeInput) registerCodeInput.value = "";
+      setAuthMessage("Account created. Verification email sent. Confirm your email before drawing.");
+      setAuthMode("profile");
     } catch (err) {
       setAuthMessage(err.message, true);
     }
@@ -1235,6 +1283,9 @@ if (profileForm) {
         const credential = EmailAuthProvider.credential(currentEmail, profilePasswordInput.value);
         await reauthenticateWithCredential(user, credential);
         await updateEmail(user, nextEmail);
+        if (auth.currentUser) {
+          await sendEmailVerification(auth.currentUser);
+        }
       }
 
       await saveUserProfile(auth.currentUser || user, { nick, email: nextEmail });
@@ -1243,7 +1294,7 @@ if (profileForm) {
       renderAuthState(auth.currentUser || user);
       trackOnlinePlayer(auth.currentUser || user);
       watchCurrentUserBan(auth.currentUser || user);
-      setAuthMessage("Profile saved.");
+      setAuthMessage(nextEmail !== currentEmail ? "Profile saved. Confirm your new email before drawing." : "Profile saved.");
     } catch (err) {
       setAuthMessage(err.message, true);
     }
@@ -1256,7 +1307,7 @@ onAuthStateChanged(auth, async user => {
     await ensureUserProfile(user);
     watchCurrentUserProfile(user);
     trackOnlinePlayer(user);
-    if (user.email === "logo100153@gmail.com") {
+    if (isAdminUser(user)) {
       adminPanel.style.display = "block";
       if (new URLSearchParams(location.search).has("migratePixels")) {
         migrateOldFirestorePixels();
@@ -1387,7 +1438,7 @@ removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
 
 // Функция для отслеживания онлайн игроков
 function isAdminUser(user = auth.currentUser) {
-  return !!user && user.email === "logo100153@gmail.com";
+  return !!user && user.email === "logo100153@gmail.com" && !!user.emailVerified;
 }
 
 function getBanPaths(target) {
