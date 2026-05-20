@@ -34,7 +34,11 @@ const banUserInput = document.getElementById('banUserInput');
 const banReasonInput = document.getElementById('banReasonInput');
 const unbanUserBtn = document.getElementById('unbanUserBtn');
 const adminPixelInfoBtn = document.getElementById('adminPixelInfoBtn');
+const adminActivityBtn = document.getElementById('adminActivityBtn');
 const pixelInfoPanel = document.getElementById('pixelInfoPanel');
+const activityPanel = document.getElementById('activityPanel');
+const activityCloseBtn = document.getElementById('activityCloseBtn');
+const activityContent = document.getElementById('activityContent');
 const myPlacementCountEl = document.getElementById('myPlacementCount');
 const statsButton = document.getElementById('statsButton');
 const statsPanel = document.getElementById('statsPanel');
@@ -126,6 +130,8 @@ let currentBanUnsubscribers = [];
 let currentUserProfileUnsubscribe = null;
 let currentUserProfile = null;
 const userProfileCache = new Map();
+let drawingActivityUnsubscribe = null;
+let drawingActivityRequestId = 0;
 
 function setPencilActive(active) {
   isPencilActive = active;
@@ -454,6 +460,63 @@ async function recordPlacementStats(user, pixelKey, color) {
   ]);
 }
 
+function pixelKeyToCellCoords(pixelKey) {
+  const [xRaw, yRaw] = String(pixelKey || "").split("_");
+  const x = Math.floor((Number(xRaw) || 0) / gridCellSize);
+  const y = Math.floor((Number(yRaw) || 0) / gridCellSize);
+  return { x, y };
+}
+
+async function activityRowsToHtml(data) {
+  const rows = Object.values(data || {})
+    .filter(row => row && row.uid)
+    .sort((a, b) => Number(b.lastAt || 0) - Number(a.lastAt || 0))
+    .slice(0, 30);
+
+  if (!rows.length) return "<p>No activity yet.</p>";
+
+  const renderedRows = await Promise.all(rows.map(async row => {
+    let profile = null;
+    try {
+      profile = await getUserProfileByUid(row.uid);
+    } catch (err) {
+      console.error(err);
+    }
+    const coords = pixelKeyToCellCoords(row.lastPixel);
+    return `<tr><td>${escapeHtml(profile?.nick || row.nick || row.uid || "unknown")}</td><td>${escapeHtml(profile?.email || "unknown")}</td><td>${coords.x} ${coords.y}</td><td>${escapeHtml(formatDateTime(row.lastAt))}</td></tr>`;
+  }));
+
+  return `<table class="activity-table"><thead><tr><th>Nick</th><th>Email</th><th>X Y</th><th>When</th></tr></thead><tbody>${renderedRows.join("")}</tbody></table>`;
+}
+
+function toggleDrawingActivityPanel(forceOpen) {
+  if (!activityPanel || !activityContent || !adminActivityBtn) return;
+  const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !activityPanel.classList.contains("open");
+  if (shouldOpen && !isAdminUser()) return alert("Only admin!");
+  activityPanel.classList.toggle("open", shouldOpen);
+  adminActivityBtn.classList.toggle("active", shouldOpen);
+
+  if (!shouldOpen) {
+    if (drawingActivityUnsubscribe) drawingActivityUnsubscribe();
+    drawingActivityUnsubscribe = null;
+    drawingActivityRequestId++;
+    return;
+  }
+
+  activityContent.textContent = "Loading...";
+  if (drawingActivityUnsubscribe) drawingActivityUnsubscribe();
+  drawingActivityUnsubscribe = onValue(ref(rtdb, "stats/users"), async snapshot => {
+    const requestId = ++drawingActivityRequestId;
+    const html = await activityRowsToHtml(snapshot.val());
+    if (requestId === drawingActivityRequestId && activityPanel.classList.contains("open")) {
+      activityContent.innerHTML = html;
+    }
+  }, err => {
+    console.error(err);
+    activityContent.textContent = "Failed to load activity.";
+  });
+}
+
 async function migrateOldFirestorePixels() {
   if (migrationStarted) return;
   migrationStarted = true;
@@ -739,6 +802,14 @@ if (adminPixelInfoBtn) {
       updatePixelInfoPanel();
     }
   });
+}
+
+if (adminActivityBtn) {
+  adminActivityBtn.addEventListener("click", () => toggleDrawingActivityPanel());
+}
+
+if (activityCloseBtn) {
+  activityCloseBtn.addEventListener("click", () => toggleDrawingActivityPanel(false));
 }
 
 // ===== Mouse handling =====
@@ -1192,10 +1263,12 @@ onAuthStateChanged(auth, async user => {
       }
     } else {
       adminPanel.style.display = "none";
+      toggleDrawingActivityPanel(false);
     }
   } else {
     watchCurrentUserProfile(null);
     adminPanel.style.display = "none";
+    toggleDrawingActivityPanel(false);
   }
   renderAuthState(user);
   watchCurrentUserStats(user);
