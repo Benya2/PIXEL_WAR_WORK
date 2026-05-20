@@ -11,6 +11,73 @@ h1 {
   margin: 10px 0;
 }
 
+#authButton {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  z-index: 10003;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-panel {
+  top: 38px;
+  left: 8px;
+  width: 280px;
+  box-sizing: border-box;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.auth-tabs button.active {
+  border-color: #111;
+  background: #e8f2ff;
+}
+
+.auth-form {
+  display: none;
+  gap: 7px;
+}
+
+.auth-form.active {
+  display: grid;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.auth-form input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px;
+}
+
+#logoutButton {
+  display: none;
+  margin-top: 8px;
+}
+
+#logoutButton.visible {
+  display: inline-block;
+}
+
+#authMessage {
+  min-height: 16px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #444;
+}
+
 #game {
   touch-action: none; /* отключает свайпы/зум браузера */
   display: block;
@@ -143,7 +210,7 @@ h1 {
   top: 98px;
   z-index: 10000;
   display: none;
-  width: 230px;
+  width: 250px;
   padding: 10px;
   background: rgba(255,255,255,0.96);
   border: 1px solid #bbb;
@@ -183,10 +250,147 @@ h1 {
 .template-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .template-actions button {
-  padding: 4px 7px;
+  padding: 4px 6px;
+}
+
+.template-actions .template-loaded-control {
+  display: none;
+}
+
+.template-panel.has-template .template-loaded-control {
+  display: inline-block;
+}
+
+.template-actions button.active {
+  border-color: #111;
+  background: #dff0ff;
+}
+
+.saved-templates {
+  display: none;
+  margin-top: 10px;
+  border-top: 1px solid #ddd;
+  padding-top: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.template-panel.has-template .saved-templates,
+.template-panel.has-saved-templates .saved-templates {
+  display: block;
+}
+
+.saved-templates-title {
+  margin-bottom: 6px;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.saved-template-item {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.saved-template-item img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border: 1px solid #ccc;
+}
+
+.saved-template-meta {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.saved-template-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.saved-template-actions button {
+  padding: 3px 5px;
+  font-size: 11px;
+}
+
+#placementStatsCorner {
+  position: fixed;
+  top: 46px;
+  right: 10px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #bbb;
+  padding: 5px 7px;
+  font-size: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.floating-panel {
+  display: none;
+  position: fixed;
+  z-index: 10002;
+  background: rgba(255,255,255,0.98);
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.22);
+  font-size: 13px;
+}
+
+.floating-panel.open {
+  display: block;
+}
+
+#statsPanel {
+  top: 82px;
+  right: 10px;
+  width: 320px;
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 4px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+#pixelInfoPanel {
+  left: 10px;
+  bottom: 42px;
+  max-width: 280px;
+  white-space: normal;
 }
 
 #templateViewport {
@@ -236,13 +440,31 @@ h1 {
   border-radius: 8px;
   border: 1px solid #ccc;
   box-shadow: 0 0 5px rgba(0,0,0,0.1);
+  width: min(560px, calc(100vw - 24px));
+  box-sizing: border-box;
+}
+
+#adminPanel h3 {
+  margin: 0 0 8px;
+}
+
+.admin-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 #adminPanel input, 
 #adminPanel button {
-  margin: 4px;
+  margin: 0;
   padding: 4px 8px;
   font-size: 14px;
+}
+
+#adminPixelInfoBtn.active {
+  background: #dff0ff;
+  border-color: #111;
 }
 
 /* Стилизованная тонкая прокрутка */
