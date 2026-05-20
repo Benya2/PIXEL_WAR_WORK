@@ -109,6 +109,7 @@
     <button id="banUser">Забанить пользователя</button>
     <div class="admin-row">
       <button id="adminPixelInfoBtn" type="button">Inspect pixel</button>
+      <button id="adminActivityBtn" type="button">Drawing activity</button>
     </div>
     <div class="admin-row">
       <input type="text" id="banUserInput" placeholder="UID or email">
@@ -127,6 +128,13 @@
 
 <button id="templatePanelToggle" type="button" title="Template" aria-label="Template" aria-expanded="false">🗺</button>
 <div id="pixelInfoPanel" class="floating-panel"></div>
+<div id="activityPanel" class="floating-panel">
+  <div class="panel-title">
+    <strong>Drawing activity</strong>
+    <button id="activityCloseBtn" type="button">×</button>
+  </div>
+  <div id="activityContent">No activity yet.</div>
+</div>
 <div id="templateControls" class="template-panel">
   <div class="template-row">
     <input type="file" id="templateFile" accept="image/*">
@@ -172,6 +180,6 @@
 </div>
 
 
-<script type="module" src="notast.js?v=cooldown04dec"></script>
+<script type="module" src="notast.js?v=activity2"></script>
 </body>
 </html>
