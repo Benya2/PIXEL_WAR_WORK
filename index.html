@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pixel War</title>
-<link rel="stylesheet" href="style.css?v=account1">
+<link rel="stylesheet" href="style.css?v=verifycode1">
 </head>
 <body>
 <button id="authButton" type="button">Log In / Register</button>
@@ -26,6 +26,7 @@
     <label>Nick <input id="registerNick" type="text" maxlength="24" autocomplete="nickname" required></label>
     <label>Email <input id="registerEmail" type="email" autocomplete="email" required></label>
     <label>Password <input id="registerPassword" type="password" minlength="6" autocomplete="new-password" required></label>
+    <label>Code <input id="registerCode" type="text" autocomplete="one-time-code" required></label>
     <button type="submit">Create account</button>
   </form>
   <form id="profileForm" class="auth-form">
@@ -34,6 +35,7 @@
     <label>Current password <input id="profilePassword" type="password" autocomplete="current-password" placeholder="Only for email change"></label>
     <button type="submit">Save profile</button>
   </form>
+  <button id="verifyEmailButton" type="button">Send verification email</button>
   <button id="logoutButton" type="button">Log out</button>
   <div id="authMessage" role="status"></div>
 </div>
@@ -180,6 +182,6 @@
 </div>
 
 
-<script type="module" src="notast.js?v=activity2"></script>
+<script type="module" src="notast.js?v=verifycode1"></script>
 </body>
 </html>
