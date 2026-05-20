@@ -71,6 +71,15 @@ h1 {
   display: inline-block;
 }
 
+#verifyEmailButton {
+  display: none;
+  margin-top: 8px;
+}
+
+#verifyEmailButton.visible {
+  display: inline-block;
+}
+
 #authMessage {
   min-height: 16px;
   margin-top: 8px;
@@ -393,6 +402,27 @@ h1 {
   white-space: normal;
 }
 
+#activityPanel {
+  left: 10px;
+  top: 140px;
+  width: min(440px, calc(100vw - 20px));
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.activity-table th,
+.activity-table td {
+  padding: 4px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
 #templateViewport {
   position: fixed;
   top: 0;
@@ -462,7 +492,8 @@ h1 {
   font-size: 14px;
 }
 
-#adminPixelInfoBtn.active {
+#adminPixelInfoBtn.active,
+#adminActivityBtn.active {
   background: #dff0ff;
   border-color: #111;
 }
