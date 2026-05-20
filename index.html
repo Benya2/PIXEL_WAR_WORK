@@ -4,10 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pixel War</title>
-<link rel="stylesheet" href="style.css?v=template2">
+<link rel="stylesheet" href="style.css?v=account1">
 </head>
 <body>
-<button id="authButton">Log In</button>
+<button id="authButton" type="button">Log In / Register</button>
+<div id="authPanel" class="floating-panel auth-panel">
+  <div class="panel-title">
+    <strong id="authPanelTitle">Account</strong>
+    <button id="authCloseBtn" type="button">×</button>
+  </div>
+  <div id="authTabs" class="auth-tabs">
+    <button id="showLoginBtn" class="active" type="button">Login</button>
+    <button id="showRegisterBtn" type="button">Register</button>
+  </div>
+  <form id="loginForm" class="auth-form">
+    <label>Email <input id="loginEmail" type="email" autocomplete="email" required></label>
+    <label>Password <input id="loginPassword" type="password" autocomplete="current-password" required></label>
+    <button type="submit">Login</button>
+  </form>
+  <form id="registerForm" class="auth-form">
+    <label>Nick <input id="registerNick" type="text" maxlength="24" autocomplete="nickname" required></label>
+    <label>Email <input id="registerEmail" type="email" autocomplete="email" required></label>
+    <label>Password <input id="registerPassword" type="password" minlength="6" autocomplete="new-password" required></label>
+    <button type="submit">Create account</button>
+  </form>
+  <form id="profileForm" class="auth-form">
+    <label>Nick <input id="profileNick" type="text" maxlength="24" autocomplete="nickname" required></label>
+    <label>Email <input id="profileEmail" type="email" autocomplete="email" required></label>
+    <label>Current password <input id="profilePassword" type="password" autocomplete="current-password" placeholder="Only for email change"></label>
+    <button type="submit">Save profile</button>
+  </form>
+  <button id="logoutButton" type="button">Log out</button>
+  <div id="authMessage" role="status"></div>
+</div>
 <h1>Pixel War</h1>
     
     <div id="coordsDisplay" style="
@@ -45,6 +74,17 @@
 
 
 <div id="onlinePlayers" style="position:fixed; top:10px; right:10px; background:#fff; padding:5px; border:1px solid #000;"></div>
+<div id="placementStatsCorner">
+  <div id="myPlacementCount">Pixels: 0 today / 0 total</div>
+  <button id="statsButton" type="button">Stats</button>
+</div>
+<div id="statsPanel" class="floating-panel">
+  <div class="panel-title">
+    <strong>Statistics</strong>
+    <button id="statsCloseBtn" type="button">×</button>
+  </div>
+  <div id="statsContent">Loading...</div>
+</div>
 <div id="colorsChoice"></div>
 <div id="togglePalette">🎨</div>
 <div id="chat">💬</div>
@@ -66,8 +106,15 @@
 <div id="reloadTimer"></div>
 <div id="adminPanel" style="display:none">
     <h3>Админка</h3>
-    <button id="clearAllPixels">Очистить всю карту</button>
     <button id="banUser">Забанить пользователя</button>
+    <div class="admin-row">
+      <button id="adminPixelInfoBtn" type="button">Inspect pixel</button>
+    </div>
+    <div class="admin-row">
+      <input type="text" id="banUserInput" placeholder="UID or email">
+      <input type="text" id="banReasonInput" placeholder="Reason">
+      <button id="unbanUserBtn" type="button">Unban</button>
+    </div>
     <input type="text" id="coordsInput" placeholder="X Y [W H], X Y [W H]..." style="width:250px;">
     <button id="addPixelBtn">Добавить</button>
     <button id="removePixelBtn">Удалить</button>
@@ -79,6 +126,7 @@
 
 
 <button id="templatePanelToggle" type="button" title="Template" aria-label="Template" aria-expanded="false">🗺</button>
+<div id="pixelInfoPanel" class="floating-panel"></div>
 <div id="templateControls" class="template-panel">
   <div class="template-row">
     <input type="file" id="templateFile" accept="image/*">
@@ -92,8 +140,15 @@
   </div>
   <div class="template-actions">
     <button id="applyCoords" type="button">OK</button>
-    <button id="toggleBtn" type="button">Hide</button>
-    <button id="clearTemplate" type="button">Clear</button>
+    <button id="toggleBtn" class="template-loaded-control" type="button">Hide</button>
+    <button id="clearTemplate" class="template-loaded-control" type="button">Clear</button>
+    <button id="followTemplateBtn" class="template-loaded-control" type="button" title="Follow mouse">Move</button>
+    <button id="autoTemplateColorBtn" class="template-loaded-control" type="button" title="Use template color">Auto</button>
+    <button id="saveTemplateBtn" class="template-loaded-control" type="button">Save</button>
+  </div>
+  <div id="savedTemplatesBlock" class="saved-templates">
+    <div class="saved-templates-title">Saved templates</div>
+    <div id="savedTemplatesList"></div>
   </div>
 </div>
 
@@ -117,6 +172,6 @@
 </div>
 
 
-<script type="module" src="notast.js?v=rtdb2"></script>
+<script type="module" src="notast.js?v=account2"></script>
 </body>
 </html>
