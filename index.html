@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pixel War</title>
-<link rel="stylesheet" href="style.css?v=mobiletouch2">
+<link rel="stylesheet" href="style.css?v=chunks1">
 </head>
 <body>
 <button id="authButton" type="button">Log In / Register</button>
@@ -118,8 +118,11 @@
       <button id="unbanUserBtn" type="button">Unban</button>
     </div>
     <input type="text" id="coordsInput" placeholder="X Y [W H], X Y [W H]..." style="width:250px;">
-    <button id="addPixelBtn">Добавить</button>
+    <input type="color" id="adminFillColor" value="#000000" title="Fill color">
+    <button id="addPixelBtn">Fill color</button>
     <button id="removePixelBtn">Удалить</button>
+    <input type="file" id="adminFillImage" accept="image/*">
+    <button id="adminFillImageBtn" type="button">Fill image</button>
     <input type="text" id="teleportInput" placeholder="X Y" style="width:150px;">
     <button id="teleportBtn">Телепорт</button>
 </div>
@@ -181,6 +184,6 @@
 </div>
 
 
-<script type="module" src="notast.js?v=mobiletouch2"></script>
+<script type="module" src="notast.js?v=chunks1"></script>
 </body>
 </html>
