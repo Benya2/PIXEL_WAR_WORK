@@ -306,6 +306,11 @@ h1 {
   background: #fff;
 }
 
+.saved-template-item.editing {
+  border-color: #111;
+  background: #e8f2ff;
+}
+
 .saved-template-item img {
   width: 30px;
   height: 30px;
@@ -485,6 +490,16 @@ h1 {
   margin: 0;
   padding: 4px 8px;
   font-size: 14px;
+}
+
+#adminFillColor {
+  width: 36px;
+  height: 28px;
+  padding: 1px;
+}
+
+#adminFillImage {
+  max-width: 180px;
 }
 
 #adminPixelInfoBtn.active,
