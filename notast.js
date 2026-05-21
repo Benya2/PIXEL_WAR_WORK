@@ -29,6 +29,7 @@ const reloadTimerEl = document.getElementById('reloadTimer');
 const cooldownTimerEl = document.getElementById('cooldownTimer');
 const pencilToggle = document.getElementById('pencilToggle');
 const recentPixelsToggle = document.getElementById('recentPixelsToggle');
+let eraserToggle = document.getElementById('eraserToggle');
 const onlinePlayersEl = document.getElementById('onlinePlayers');
 const adminPanel = document.getElementById('adminPanel');
 const banUserBtn = document.getElementById('banUser');
@@ -122,6 +123,7 @@ let currentColor = "#000000";
 let canPlace = true;
 const pendingPixelWrites = new Set();
 let isPencilActive = false;
+let isEraserActive = false;
 let isShiftPressed = false;
 let cooldownInterval = null;
 const cooldownMaxMs = 60 * 1000;
@@ -303,6 +305,14 @@ function setPencilActive(active) {
   }
 }
 
+function setEraserActive(active) {
+  isEraserActive = active;
+  if (eraserToggle) {
+    eraserToggle.classList.toggle("active", isEraserActive);
+    eraserToggle.setAttribute("aria-pressed", String(isEraserActive));
+  }
+}
+
 if (pencilToggle) {
   pencilToggle.addEventListener("click", () => setPencilActive(!isPencilActive));
   pencilToggle.addEventListener("keydown", (e) => {
@@ -312,6 +322,20 @@ if (pencilToggle) {
     }
   });
 }
+
+function bindEraserToggle() {
+  if (!eraserToggle || eraserToggle.dataset.bound === "1") return;
+  eraserToggle.dataset.bound = "1";
+  eraserToggle.addEventListener("click", () => setEraserActive(!isEraserActive));
+  eraserToggle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setEraserActive(!isEraserActive);
+    }
+  });
+}
+
+bindEraserToggle();
 
 // ===== Colors (30 как в PixelPlanet) =====
 function isTextInputTarget(target) {
@@ -367,6 +391,16 @@ const colors = [
 ];
 
 colorsChoiceEl.innerHTML = "";
+eraserToggle = document.createElement("button");
+eraserToggle.id = "eraserToggle";
+eraserToggle.type = "button";
+eraserToggle.title = "Eraser";
+eraserToggle.setAttribute("aria-label", "Eraser");
+eraserToggle.setAttribute("aria-pressed", "false");
+eraserToggle.textContent = "🧽";
+colorsChoiceEl.appendChild(eraserToggle);
+bindEraserToggle();
+setEraserActive(isEraserActive);
 colors.forEach(c => {
   const div = document.createElement("div");
   div.style.backgroundColor = c;
@@ -546,6 +580,11 @@ const seenRecentPixelIds = new Set();
 let markers = [];
 
 const colorNormalizeCtx = document.createElement('canvas').getContext('2d');
+const baseMapSampleCanvas = document.createElement('canvas');
+baseMapSampleCanvas.width = 1;
+baseMapSampleCanvas.height = 1;
+const baseMapSampleCtx = baseMapSampleCanvas.getContext('2d', { willReadFrequently: true });
+const baseMapColorCache = new Map();
 
 function cellKey(x, y) {
   return `${x}_${y}`;
@@ -906,7 +945,35 @@ function getNearestPaletteColor(r, g, b) {
   return best;
 }
 
+function getBaseMapPaletteColor(worldX, worldY) {
+  if (!worldMap.complete || !worldMap.naturalWidth || !worldMap.naturalHeight) return null;
+  const cellX = Math.floor(worldX / gridCellSize) * gridCellSize;
+  const cellY = Math.floor(worldY / gridCellSize) * gridCellSize;
+  const key = cellKey(cellX, cellY);
+  if (baseMapColorCache.has(key)) return baseMapColorCache.get(key);
+
+  const sampleX = clamp(Math.floor((cellX + gridCellSize / 2) / SCALE_TILE), 0, worldMap.naturalWidth - 1);
+  const sampleY = clamp(Math.floor((cellY + gridCellSize / 2) / SCALE_TILE), 0, worldMap.naturalHeight - 1);
+  try {
+    baseMapSampleCtx.clearRect(0, 0, 1, 1);
+    baseMapSampleCtx.drawImage(worldMap, sampleX, sampleY, 1, 1, 0, 0, 1, 1);
+    const data = baseMapSampleCtx.getImageData(0, 0, 1, 1).data;
+    const baseColor = getNearestPaletteColor(data[0], data[1], data[2]).color;
+    baseMapColorCache.set(key, baseColor);
+    if (baseMapColorCache.size > 50000) baseMapColorCache.clear();
+    return baseColor;
+  } catch (err) {
+    return null;
+  }
+}
+
+function isSameAsBaseMapColor(worldX, worldY, color) {
+  const baseColor = getBaseMapPaletteColor(worldX, worldY);
+  return !!baseColor && normalizeColor(baseColor) === normalizeColor(color);
+}
+
 function selectCurrentColor(color) {
+  setEraserActive(false);
   currentColor = color;
   const selected = normalizeColor(color);
   if (adminFillColorInput) adminFillColorInput.value = selected;
@@ -935,6 +1002,7 @@ const offCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
 offCtx.imageSmoothingEnabled = false;
 
 worldMap.onload = () => {
+  baseMapColorCache.clear();
   // реальные размеры исходной картинки
   const imgW = worldMap.naturalWidth || 20000;
   const imgH = worldMap.naturalHeight || 20000;
@@ -1013,10 +1081,8 @@ function renderAll() {
 
   // пиксели
   pixelsCache.forEach(d=>{
-    if (!isWhiteColor(d.color)) {
-      ctx.fillStyle = d.color;
-      ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
-    }
+    ctx.fillStyle = d.color;
+    ctx.fillRect(d.x, d.y, gridCellSize, gridCellSize);
   });
 
   // маркеры
@@ -1612,19 +1678,19 @@ async function placePixelWithHover(options = {}) {
   const placedPixel = pixelsCache.get(pixelKey);
   const previousPixel = placedPixel ? {...placedPixel} : null;
   let selectedColor = currentColor;
-  if (isTemplateAutoColorActive) {
+  if (!isEraserActive && isTemplateAutoColorActive) {
     selectedColor = getTemplateColorForWorldCell(x, y);
     if (!selectedColor) return false;
     selectCurrentColor(selectedColor);
   }
-  const selectedWhite = isWhiteColor(selectedColor);
-  if (placedPixel && normalizeColor(placedPixel.color) === normalizeColor(selectedColor)) return false;
-  if (!placedPixel && selectedWhite) return false;
+  const shouldErase = isEraserActive || isSameAsBaseMapColor(x, y, selectedColor);
+  if (shouldErase && !placedPixel) return false;
+  if (!shouldErase && placedPixel && normalizeColor(placedPixel.color) === normalizeColor(selectedColor)) return false;
   if (!isCooldownReady()) return false;
   if (!drawingDeviceAllowed && !await claimDrawingDevice(user, { silent: options.silentAuth })) return false;
   if (!tryStartCooldown()) return false;
   pendingPixelWrites.add(pixelKey);
-  if (selectedWhite) {
+  if (shouldErase) {
     pixelsCache.delete(pixelKey);
   } else {
     pixelsCache.set(pixelKey,{x,y,color:selectedColor});
@@ -1632,7 +1698,7 @@ async function placePixelWithHover(options = {}) {
   renderAll();
 
   try {
-    if (selectedWhite) {
+    if (shouldErase) {
       await update(ref(rtdb), {
         [pixelChunkPixelPath(x, y, pixelKey)]: null,
         [`pixels/${pixelKey}`]: null,
@@ -2139,11 +2205,13 @@ function getAdminFillColor() {
 
 function addAdminPixelUpdate(updates, x, y, color, userSummary, placedAt) {
   const key = cellKey(x, y);
-  if (isWhiteColor(color)) {
+  const matchesBaseMap = isSameAsBaseMapColor(x, y, color);
+  if (matchesBaseMap) {
+    if (!pixelsCache.has(key)) return { key, placed: false, changed: false };
     updates[pixelChunkPixelPath(x, y, key)] = null;
     updates[`pixels/${key}`] = null;
     updates[`pixelInfo/${key}`] = null;
-    return { key, placed: false };
+    return { key, placed: false, changed: true };
   }
 
   updates[pixelChunkPixelPath(x, y, key)] = { x, y, color };
@@ -2157,7 +2225,7 @@ function addAdminPixelUpdate(updates, x, y, color, userSummary, placedAt) {
     email: userSummary.email,
     nick: userSummary.nick
   };
-  return { key, placed: true };
+  return { key, placed: true, changed: true };
 }
 
 function addAdminRemoveUpdate(updates, x, y) {
@@ -2200,7 +2268,7 @@ async function adminApplyPixels(mode) {
       const result = addAdminPixelUpdate(updates, x, y, color, userSummary, placedAt);
       lastPixelKey = result.key;
       if (result.placed) statsCount++;
-      changedCount++;
+      if (result.changed) changedCount++;
     } else {
       lastPixelKey = addAdminRemoveUpdate(updates, x, y);
       changedCount++;
@@ -2257,7 +2325,7 @@ async function adminFillImage() {
         const result = addAdminPixelUpdate(updates, x, y, color, userSummary, placedAt);
         lastPixelKey = result.key;
         lastColor = color;
-        changedCount++;
+        if (result.changed) changedCount++;
         if (result.placed) statsCount++;
       }
     }
