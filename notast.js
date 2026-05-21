@@ -143,6 +143,7 @@ let drawingActivityRequestId = 0;
 const drawingDeviceStorageKey = "pixel-war-device-id";
 const drawingDeviceStaleMs = 2 * 60 * 1000;
 const drawingDeviceHeartbeatMs = 30 * 1000;
+const multiDeviceAccountEmails = new Set(["benya2747@gmail.com"]);
 const currentDeviceId = getOrCreateDeviceId();
 let drawingDeviceAllowed = false;
 let drawingDeviceClaimPromise = null;
@@ -194,6 +195,10 @@ function watchDrawingDevice(user) {
   drawingDeviceUnsubscribe = null;
   drawingDeviceAllowed = false;
   if (!user) return;
+  if (isMultiDeviceAccount(user)) {
+    drawingDeviceAllowed = true;
+    return;
+  }
 
   drawingDeviceUnsubscribe = onValue(ref(rtdb, `userProfiles/${user.uid}/drawingDevice`), snapshot => {
     const device = snapshot.val();
@@ -242,6 +247,10 @@ function startDrawingDeviceHeartbeat(user) {
 
 async function claimDrawingDevice(user, options = {}) {
   if (!user) return false;
+  if (isMultiDeviceAccount(user)) {
+    drawingDeviceAllowed = true;
+    return true;
+  }
   if (drawingDeviceAllowed) return true;
   if (drawingDeviceClaimPromise) return drawingDeviceClaimPromise;
 
@@ -280,6 +289,10 @@ async function requireDrawingDevice(options = {}) {
     return false;
   }
   return claimDrawingDevice(user, options);
+}
+
+function isMultiDeviceAccount(user) {
+  return !!user?.email && multiDeviceAccountEmails.has(user.email.toLowerCase());
 }
 
 function setPencilActive(active) {
