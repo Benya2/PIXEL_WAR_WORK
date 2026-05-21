@@ -1098,6 +1098,7 @@ function startRecentPixelsWatch() {
     rows.forEach(row => {
       if (seenRecentPixelIds.has(row.id)) return;
       rememberSeenRecentPixel(row.id);
+      if (auth.currentUser && row.uid === auth.currentUser.uid) return;
       addRecentPixelEffect(row);
     });
   }, err => {
