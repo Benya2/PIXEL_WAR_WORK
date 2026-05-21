@@ -137,10 +137,14 @@ const userProfileCache = new Map();
 let drawingActivityUnsubscribe = null;
 let drawingActivityRequestId = 0;
 const drawingDeviceStorageKey = "pixel-war-device-id";
+const drawingDeviceStaleMs = 2 * 60 * 1000;
+const drawingDeviceHeartbeatMs = 30 * 1000;
 const currentDeviceId = getOrCreateDeviceId();
 let drawingDeviceAllowed = false;
 let drawingDeviceClaimPromise = null;
 let drawingDeviceUnsubscribe = null;
+let drawingDeviceHeartbeatInterval = null;
+let drawingDeviceAlertAt = 0;
 let deviceCooldownKeyPromise = null;
 
 function getOrCreateDeviceId() {
@@ -182,14 +186,54 @@ function getDeviceCooldownKey() {
 
 function watchDrawingDevice(user) {
   if (drawingDeviceUnsubscribe) drawingDeviceUnsubscribe();
+  stopDrawingDeviceHeartbeat();
   drawingDeviceUnsubscribe = null;
   drawingDeviceAllowed = false;
   if (!user) return;
 
   drawingDeviceUnsubscribe = onValue(ref(rtdb, `userProfiles/${user.uid}/drawingDevice`), snapshot => {
     const device = snapshot.val();
-    drawingDeviceAllowed = !device || device.id === currentDeviceId;
+    drawingDeviceAllowed = !!device && device.id === currentDeviceId;
+    if (drawingDeviceAllowed) startDrawingDeviceHeartbeat(user);
+    else stopDrawingDeviceHeartbeat();
   });
+}
+
+function isDrawingDeviceStale(device) {
+  if (!device) return true;
+  const lastSeen = Number(device.lastSeen || device.claimedAt || 0);
+  return !Number.isFinite(lastSeen) || Date.now() - lastSeen > drawingDeviceStaleMs;
+}
+
+function getDrawingDevicePayload(user, current = null) {
+  return {
+    id: currentDeviceId,
+    nick: getUserName(user),
+    email: user.email || "",
+    claimedAt: current?.claimedAt || Date.now(),
+    lastSeen: Date.now()
+  };
+}
+
+function stopDrawingDeviceHeartbeat() {
+  if (drawingDeviceHeartbeatInterval) clearInterval(drawingDeviceHeartbeatInterval);
+  drawingDeviceHeartbeatInterval = null;
+}
+
+function sendDrawingDeviceHeartbeat(user) {
+  if (!user || !drawingDeviceAllowed) return;
+  update(ref(rtdb, `userProfiles/${user.uid}/drawingDevice`), {
+    id: currentDeviceId,
+    nick: getUserName(user),
+    email: user.email || "",
+    lastSeen: Date.now()
+  }).catch(console.error);
+}
+
+function startDrawingDeviceHeartbeat(user) {
+  if (drawingDeviceHeartbeatInterval) return;
+  sendDrawingDeviceHeartbeat(user);
+  drawingDeviceHeartbeatInterval = setInterval(() => sendDrawingDeviceHeartbeat(user), drawingDeviceHeartbeatMs);
 }
 
 async function claimDrawingDevice(user, options = {}) {
@@ -200,14 +244,8 @@ async function claimDrawingDevice(user, options = {}) {
   drawingDeviceClaimPromise = (async () => {
     const deviceRef = ref(rtdb, `userProfiles/${user.uid}/drawingDevice`);
     await runTransaction(deviceRef, current => {
-      if (!current || current.id === currentDeviceId) {
-        return {
-          id: currentDeviceId,
-          nick: getUserName(user),
-          email: user.email || "",
-          claimedAt: current?.claimedAt || Date.now(),
-          lastSeen: Date.now()
-        };
+      if (!current || current.id === currentDeviceId || isDrawingDeviceStale(current)) {
+        return getDrawingDevicePayload(user, current);
       }
       return current;
     });
@@ -215,8 +253,11 @@ async function claimDrawingDevice(user, options = {}) {
     const snapshot = await get(deviceRef);
     const device = snapshot.val();
     drawingDeviceAllowed = !!device && device.id === currentDeviceId;
-    if (!drawingDeviceAllowed && !options.silent) {
-      alert("This account can draw only on its first device.");
+    if (drawingDeviceAllowed) {
+      startDrawingDeviceHeartbeat(user);
+    } else if (!options.silent && Date.now() - drawingDeviceAlertAt > 5000) {
+      drawingDeviceAlertAt = Date.now();
+      alert("This account is already active on another device. Close the old tab and wait about 2 minutes.");
     }
     return drawingDeviceAllowed;
   })();
