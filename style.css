@@ -235,6 +235,33 @@ h1 {
   outline-offset: 2px;
 }
 
+#eraserToggle {
+  grid-column: 1 / -1;
+  width: 62px;
+  height: 30px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+#eraserToggle.active {
+  border-color: #000;
+  background: #ffe4e4;
+}
+
+#eraserToggle:focus-visible {
+  outline: 2px solid #ff5a5f;
+  outline-offset: 2px;
+}
+
 .template-panel {
   position: fixed;
   left: 50px;
