@@ -68,6 +68,9 @@ const authMessage = document.getElementById('authMessage');
 const coordsInput = document.getElementById('coordsInput');
 const addPixelBtn = document.getElementById('addPixelBtn');
 const removePixelBtn = document.getElementById('removePixelBtn');
+const adminFillColorInput = document.getElementById('adminFillColor');
+const adminFillImageInput = document.getElementById('adminFillImage');
+const adminFillImageBtn = document.getElementById('adminFillImageBtn');
 
 if (adminPanel) {
   const adminTitle = adminPanel.querySelector("h3");
@@ -501,12 +504,43 @@ function snapToGrid(wx, wy) {
 
 let hoverCellX = 0, hoverCellY = 0;
 const pixelsCache = new Map();
+const PIXEL_CHUNK_CELLS = 256;
+const PIXEL_CHUNK_WORLD_SIZE = PIXEL_CHUNK_CELLS * gridCellSize;
+const MAX_ACTIVE_PIXEL_CHUNKS = 80;
+const activePixelChunkUnsubscribers = new Map();
+const activePixelChunkPixelKeys = new Map();
+let visibleChunkSyncTimeout = null;
+let realtimeChunkMigrationStarted = false;
 let markers = [];
 
 const colorNormalizeCtx = document.createElement('canvas').getContext('2d');
 
 function cellKey(x, y) {
   return `${x}_${y}`;
+}
+
+function pixelChunkCoordsForWorld(x, y) {
+  return {
+    cx: Math.floor(x / PIXEL_CHUNK_WORLD_SIZE),
+    cy: Math.floor(y / PIXEL_CHUNK_WORLD_SIZE)
+  };
+}
+
+function pixelChunkKey(cx, cy) {
+  return `${cx}_${cy}`;
+}
+
+function pixelChunkKeyForWorld(x, y) {
+  const { cx, cy } = pixelChunkCoordsForWorld(x, y);
+  return pixelChunkKey(cx, cy);
+}
+
+function pixelChunkPathForWorld(x, y) {
+  return `pixelChunks/${pixelChunkKeyForWorld(x, y)}/pixels`;
+}
+
+function pixelChunkPixelPath(x, y, key = cellKey(x, y)) {
+  return `${pixelChunkPathForWorld(x, y)}/${key}`;
 }
 
 function safeKey(value) {
@@ -638,6 +672,12 @@ async function incrementCounter(path) {
   await runTransaction(ref(rtdb, path), value => (Number(value) || 0) + 1);
 }
 
+async function incrementCounterBy(path, amount) {
+  const count = Number(amount) || 0;
+  if (count <= 0) return;
+  await runTransaction(ref(rtdb, path), value => (Number(value) || 0) + count);
+}
+
 async function recordPlacementStats(user, pixelKey, color) {
   const summary = getUserSummary(user);
   if (!summary) return;
@@ -648,6 +688,34 @@ async function recordPlacementStats(user, pixelKey, color) {
   await Promise.all([
     incrementCounter(`${baseUserPath}/count`),
     incrementCounter(`${dailyUserPath}/count`),
+    update(ref(rtdb, baseUserPath), {
+      uid: summary.uid,
+      nick: summary.nick,
+      lastPixel: pixelKey,
+      lastColor: color,
+      lastAt: Date.now()
+    }),
+    update(ref(rtdb, dailyUserPath), {
+      uid: summary.uid,
+      nick: summary.nick,
+      lastPixel: pixelKey,
+      lastColor: color,
+      lastAt: Date.now()
+    })
+  ]);
+}
+
+async function recordBulkPlacementStats(user, count, pixelKey, color) {
+  const summary = getUserSummary(user);
+  const amount = Number(count) || 0;
+  if (!summary || amount <= 0) return;
+  const day = todayKey();
+  const baseUserPath = `stats/users/${summary.uid}`;
+  const dailyUserPath = `stats/daily/${day}/users/${summary.uid}`;
+
+  await Promise.all([
+    incrementCounterBy(`${baseUserPath}/count`, amount),
+    incrementCounterBy(`${dailyUserPath}/count`, amount),
     update(ref(rtdb, baseUserPath), {
       uid: summary.uid,
       nick: summary.nick,
@@ -739,10 +807,11 @@ async function migrateOldFirestorePixels() {
       const y = Number(d.y);
       const color = d.color;
       if (!Number.isFinite(x) || !Number.isFinite(y) || !color) return;
-      updates[cellKey(x, y)] = { x, y, color };
+      const key = cellKey(x, y);
+      updates[pixelChunkPixelPath(x, y, key)] = { x, y, color };
     });
 
-    await update(ref(rtdb, "pixels"), updates);
+    await update(ref(rtdb), updates);
     alert(`Migrated pixels: ${Object.keys(updates).length}`);
   } catch (err) {
     migrationStarted = false;
@@ -797,6 +866,7 @@ function getNearestPaletteColor(r, g, b) {
 function selectCurrentColor(color) {
   currentColor = color;
   const selected = normalizeColor(color);
+  if (adminFillColorInput) adminFillColorInput.value = selected;
   document.querySelectorAll("#colorsChoice div").forEach(el => {
     el.classList.toggle("selected", normalizeColor(el.style.backgroundColor) === selected);
   });
@@ -919,22 +989,88 @@ function renderAll() {
   ctx.setTransform(1,0,0,1,0,0);
 }
 
-// ===== Realtime Database pixels =====
-onValue(ref(rtdb, "pixels"), snapshot => {
-  pixelsCache.clear();
-  const data = snapshot.val() || {};
-  Object.values(data).forEach(d => {
-    if (!d) return;
-    const x = Number(d.x);
-    const y = Number(d.y);
-    const color = d.color;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !color) return;
-    pixelsCache.set(cellKey(x, y), { x, y, color });
+// ===== Realtime Database pixels by visible chunks =====
+function getVisiblePixelChunkKeys() {
+  const viewLeft = Math.max(0, camX - PIXEL_CHUNK_WORLD_SIZE);
+  const viewTop = Math.max(0, camY - PIXEL_CHUNK_WORLD_SIZE);
+  const viewRight = Math.min(WORLD_W, camX + game.width / scale + PIXEL_CHUNK_WORLD_SIZE);
+  const viewBottom = Math.min(WORLD_H, camY + game.height / scale + PIXEL_CHUNK_WORLD_SIZE);
+  const minCx = Math.max(0, Math.floor(viewLeft / PIXEL_CHUNK_WORLD_SIZE));
+  const minCy = Math.max(0, Math.floor(viewTop / PIXEL_CHUNK_WORLD_SIZE));
+  const maxCx = Math.max(minCx, Math.floor(viewRight / PIXEL_CHUNK_WORLD_SIZE));
+  const maxCy = Math.max(minCy, Math.floor(viewBottom / PIXEL_CHUNK_WORLD_SIZE));
+  const centerCx = Math.floor((camX + game.width / scale / 2) / PIXEL_CHUNK_WORLD_SIZE);
+  const centerCy = Math.floor((camY + game.height / scale / 2) / PIXEL_CHUNK_WORLD_SIZE);
+  const chunks = [];
+
+  for (let cx = minCx; cx <= maxCx; cx++) {
+    for (let cy = minCy; cy <= maxCy; cy++) {
+      chunks.push({
+        key: pixelChunkKey(cx, cy),
+        distance: Math.abs(cx - centerCx) + Math.abs(cy - centerCy)
+      });
+    }
+  }
+
+  return chunks
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, MAX_ACTIVE_PIXEL_CHUNKS)
+    .map(chunk => chunk.key);
+}
+
+function removeChunkPixels(chunkKey) {
+  const keys = activePixelChunkPixelKeys.get(chunkKey);
+  if (!keys) return;
+  keys.forEach(key => pixelsCache.delete(key));
+  activePixelChunkPixelKeys.delete(chunkKey);
+}
+
+function listenPixelChunk(chunkKey) {
+  const unsubscribe = onValue(ref(rtdb, `pixelChunks/${chunkKey}/pixels`), snapshot => {
+    removeChunkPixels(chunkKey);
+    const nextKeys = new Set();
+    const data = snapshot.val() || {};
+    Object.entries(data).forEach(([key, d]) => {
+      if (!d) return;
+      const x = Number(d.x);
+      const y = Number(d.y);
+      const color = d.color;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !color) return;
+      pixelsCache.set(key, { x, y, color });
+      nextKeys.add(key);
+    });
+    activePixelChunkPixelKeys.set(chunkKey, nextKeys);
+    renderAll();
+  }, err => {
+    console.error(err);
   });
-  renderAll();
-}, err => {
-  console.error(err);
-});
+  activePixelChunkUnsubscribers.set(chunkKey, unsubscribe);
+}
+
+function syncVisiblePixelChunks() {
+  visibleChunkSyncTimeout = null;
+  const nextChunkKeys = new Set(getVisiblePixelChunkKeys());
+  let removedAnyChunk = false;
+
+  activePixelChunkUnsubscribers.forEach((unsubscribe, chunkKey) => {
+    if (nextChunkKeys.has(chunkKey)) return;
+    unsubscribe();
+    activePixelChunkUnsubscribers.delete(chunkKey);
+    removeChunkPixels(chunkKey);
+    removedAnyChunk = true;
+  });
+
+  nextChunkKeys.forEach(chunkKey => {
+    if (!activePixelChunkUnsubscribers.has(chunkKey)) listenPixelChunk(chunkKey);
+  });
+
+  if (removedAnyChunk) renderAll();
+}
+
+function scheduleVisiblePixelChunkSync() {
+  if (visibleChunkSyncTimeout) return;
+  visibleChunkSyncTimeout = setTimeout(syncVisiblePixelChunks, 80);
+}
 
 function updateHoverFromPoint(clientX, clientY) {
   const [wx, wy] = screenToWorld(clientX, clientY);
@@ -963,11 +1099,15 @@ async function updatePixelInfoPanel() {
 
   try {
     const [pixelSnapshot, infoSnapshot] = await Promise.all([
-      get(ref(rtdb, `pixels/${key}`)),
+      get(ref(rtdb, pixelChunkPixelPath(hoverCellX, hoverCellY, key))),
       get(ref(rtdb, `pixelInfo/${key}`))
     ]);
     if (requestId !== inspectRequestId) return;
-    const pixel = pixelSnapshot.val();
+    let pixel = pixelSnapshot.val();
+    if (!pixel) {
+      const legacyPixelSnapshot = await get(ref(rtdb, `pixels/${key}`));
+      pixel = legacyPixelSnapshot.val();
+    }
     const info = infoSnapshot.val();
 
     if (!pixel) {
@@ -993,6 +1133,39 @@ async function updatePixelInfoPanel() {
     if (requestId === inspectRequestId) {
       pixelInfoPanel.innerHTML = `<strong>Pixel ${cellX}, ${cellY}</strong><br>Failed to load.`;
     }
+  }
+}
+
+async function migrateRealtimePixelsToChunks() {
+  if (realtimeChunkMigrationStarted) return;
+  realtimeChunkMigrationStarted = true;
+  if (!confirm("Copy old Realtime Database pixels into chunks? Do this once after deploying chunk mode.")) return;
+
+  try {
+    const snapshot = await get(ref(rtdb, "pixels"));
+    const data = snapshot.val() || {};
+    const entries = Object.entries(data).filter(([, d]) => d && Number.isFinite(Number(d.x)) && Number.isFinite(Number(d.y)) && d.color);
+    let migrated = 0;
+
+    for (let i = 0; i < entries.length; i += 500) {
+      const updates = {};
+      entries.slice(i, i + 500).forEach(([legacyKey, d]) => {
+        const x = Number(d.x);
+        const y = Number(d.y);
+        const color = d.color;
+        const key = legacyKey || cellKey(x, y);
+        updates[pixelChunkPixelPath(x, y, key)] = { x, y, color };
+      });
+      await update(ref(rtdb), updates);
+      migrated += Object.keys(updates).length;
+    }
+
+    alert(`Chunk migration complete. Pixels copied: ${migrated}`);
+    syncVisiblePixelChunks();
+  } catch (err) {
+    realtimeChunkMigrationStarted = false;
+    console.error(err);
+    alert("Chunk migration failed. Try again later.");
   }
 }
 
@@ -1321,6 +1494,7 @@ async function placePixelWithHover(options = {}) {
   try {
     if (selectedWhite) {
       await update(ref(rtdb), {
+        [pixelChunkPixelPath(x, y, pixelKey)]: null,
         [`pixels/${pixelKey}`]: null,
         [`pixelInfo/${pixelKey}`]: null
       });
@@ -1328,7 +1502,8 @@ async function placePixelWithHover(options = {}) {
       const userSummary = getUserSummary();
       const placedAt = Date.now();
       await update(ref(rtdb), {
-        [`pixels/${pixelKey}`]: { x, y, color: selectedColor },
+        [pixelChunkPixelPath(x, y, pixelKey)]: { x, y, color: selectedColor },
+        [`pixels/${pixelKey}`]: null,
         [`pixelInfo/${pixelKey}`]: {
           x,
           y,
@@ -1705,8 +1880,12 @@ onAuthStateChanged(auth, async user => {
     trackOnlinePlayer(user);
     if (isAdminUser(user)) {
       adminPanel.style.display = "block";
-      if (new URLSearchParams(location.search).has("migratePixels")) {
+      const params = new URLSearchParams(location.search);
+      if (params.has("migratePixels")) {
         migrateOldFirestorePixels();
+      }
+      if (params.has("migrateChunks")) {
+        migrateRealtimePixelsToChunks();
       }
     } else {
       adminPanel.style.display = "none";
@@ -1726,17 +1905,27 @@ onAuthStateChanged(auth, async user => {
 });
 
 // ===== Admin: coords input + preview =====
+function parseAdminRegions(defaultWidth = 1, defaultHeight = 1) {
+  const value = coordsInput.value.trim();
+  if (!value) return [];
+
+  return value.split(",").map(part => {
+    const [xCellStr, yCellStr, wCellStr, hCellStr] = part.trim().split(/\s+/);
+    const xCell = parseInt(xCellStr);
+    const yCell = parseInt(yCellStr);
+    const wCell = Math.max(1, parseInt(wCellStr || String(defaultWidth)));
+    const hCell = Math.max(1, parseInt(hCellStr || String(defaultHeight)));
+    if (Number.isNaN(xCell) || Number.isNaN(yCell) || Number.isNaN(wCell) || Number.isNaN(hCell)) return null;
+    return { xCell, yCell, wCell, hCell };
+  }).filter(Boolean);
+}
+
 function parseCoords() {
   markers = [];
-  const value = coordsInput.value.trim();
-  if (!value) { renderAll(); return; }
+  const regions = parseAdminRegions();
+  if (!regions.length) { renderAll(); return; }
 
-  value.split(",").forEach(part => {
-    const [xCellStr, yCellStr, wCellStr, hCellStr] = part.trim().split(/\s+/);
-    const xCell = parseInt(xCellStr), yCell = parseInt(yCellStr);
-    const wCell = parseInt(wCellStr || '1'), hCell = parseInt(hCellStr || '1');
-    if (Number.isNaN(xCell) || Number.isNaN(yCell) || Number.isNaN(wCell) || Number.isNaN(hCell)) return;
-
+  regions.forEach(({ xCell, yCell, wCell, hCell }) => {
     const startX = xCell * gridCellSize;
     const startY = yCell * gridCellSize;
     for (let dx = 0; dx < wCell; dx++) {
@@ -1793,44 +1982,150 @@ zoomOutBtn.addEventListener('click', ()=>{
 
 coordsInput.addEventListener('input', parseCoords);
 
+function getAdminFillColor() {
+  const color = adminFillColorInput?.value || currentColor;
+  const rgb = colorToRgb(color);
+  return getNearestPaletteColor(rgb.r, rgb.g, rgb.b).color;
+}
+
+function addAdminPixelUpdate(updates, x, y, color, userSummary, placedAt) {
+  const key = cellKey(x, y);
+  if (isWhiteColor(color)) {
+    updates[pixelChunkPixelPath(x, y, key)] = null;
+    updates[`pixels/${key}`] = null;
+    updates[`pixelInfo/${key}`] = null;
+    return { key, placed: false };
+  }
+
+  updates[pixelChunkPixelPath(x, y, key)] = { x, y, color };
+  updates[`pixels/${key}`] = null;
+  updates[`pixelInfo/${key}`] = {
+    x,
+    y,
+    color,
+    placedAt,
+    uid: userSummary.uid,
+    email: userSummary.email,
+    nick: userSummary.nick
+  };
+  return { key, placed: true };
+}
+
+function addAdminRemoveUpdate(updates, x, y) {
+  const key = cellKey(x, y);
+  updates[pixelChunkPixelPath(x, y, key)] = null;
+  updates[`pixels/${key}`] = null;
+  updates[`pixelInfo/${key}`] = null;
+  return key;
+}
+
+async function commitAdminPixelUpdates(updates, statsCount = 0, lastPixelKey = "", lastColor = "") {
+  const keys = Object.keys(updates);
+  if (!keys.length) return 0;
+  await update(ref(rtdb), updates);
+  if (statsCount > 0) {
+    recordBulkPlacementStats(auth.currentUser, statsCount, lastPixelKey, lastColor).catch(console.error);
+  }
+  return Math.floor(keys.length / 2);
+}
+
+function confirmLargeAdminFill(pixelCount) {
+  return pixelCount <= 10000 || confirm(`This will write about ${pixelCount} pixels. Continue?`);
+}
+
 async function adminApplyPixels(mode) {
   if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
     return alert("Только админ!");
   }
   parseCoords();
-  let count = 0;
+  if (!confirmLargeAdminFill(markers.length)) return;
+  const userSummary = getUserSummary();
+  const placedAt = Date.now();
+  const color = getAdminFillColor();
+  const updates = {};
+  let changedCount = 0;
+  let statsCount = 0;
+  let lastPixelKey = "";
   for (const [x,y] of markers) {
-    const key = cellKey(x, y);
     if (mode === 'add') {
-      const userSummary = getUserSummary();
-      const placedAt = Date.now();
-      await update(ref(rtdb), {
-        [`pixels/${key}`]: { x, y, color: currentColor },
-        [`pixelInfo/${key}`]: {
-          x,
-          y,
-          color: currentColor,
-          placedAt,
-          uid: userSummary.uid,
-          email: userSummary.email,
-          nick: userSummary.nick
-        }
-      });
-      recordPlacementStats(auth.currentUser, key, currentColor).catch(console.error);
-      count++;
+      const result = addAdminPixelUpdate(updates, x, y, color, userSummary, placedAt);
+      lastPixelKey = result.key;
+      if (result.placed) statsCount++;
+      changedCount++;
     } else {
-      await update(ref(rtdb), {
-        [`pixels/${key}`]: null,
-        [`pixelInfo/${key}`]: null
-      });
-      count++;
+      lastPixelKey = addAdminRemoveUpdate(updates, x, y);
+      changedCount++;
     }
   }
-  alert(`${mode==='add'?'Добавлено':'Удалено'} пикселей: ${count}`);
+  await commitAdminPixelUpdates(updates, statsCount, lastPixelKey, color);
+  alert(`${mode==='add'?'Filled':'Removed'} pixels: ${changedCount}`);
+  return;
+}
+
+function getFileDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = event => resolve(event.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function adminFillImage() {
+  if (!auth.currentUser || auth.currentUser.email !== "logo100153@gmail.com") {
+    return alert("Only admin!");
+  }
+  const file = adminFillImageInput?.files?.[0];
+  if (!file) return alert("Choose image first.");
+
+  const processedTemplate = await quantizeTemplateImage(await getFileDataUrl(file));
+  const imagePixels = processedTemplate.pixels;
+  const regions = parseAdminRegions(imagePixels.width, imagePixels.height);
+  if (!regions.length) return alert("Enter coordinates: X Y [W H].");
+  const plannedPixelCount = regions.reduce((total, region) => total + region.wCell * region.hCell, 0);
+  if (!confirmLargeAdminFill(plannedPixelCount)) return;
+
+  const userSummary = getUserSummary();
+  const placedAt = Date.now();
+  const updates = {};
+  let changedCount = 0;
+  let statsCount = 0;
+  let lastPixelKey = "";
+  let lastColor = "";
+
+  for (const region of regions) {
+    for (let dy = 0; dy < region.hCell; dy++) {
+      const imageY = Math.min(imagePixels.height - 1, Math.floor(dy * imagePixels.height / region.hCell));
+      for (let dx = 0; dx < region.wCell; dx++) {
+        const imageX = Math.min(imagePixels.width - 1, Math.floor(dx * imagePixels.width / region.wCell));
+        const color = imagePixels.colors[imageY * imagePixels.width + imageX];
+        if (!color) continue;
+
+        const x = (region.xCell + dx) * gridCellSize;
+        const y = (region.yCell + dy) * gridCellSize;
+        if (x < 0 || y < 0 || x > WORLD_W - gridCellSize || y > WORLD_H - gridCellSize) continue;
+
+        const result = addAdminPixelUpdate(updates, x, y, color, userSummary, placedAt);
+        lastPixelKey = result.key;
+        lastColor = color;
+        changedCount++;
+        if (result.placed) statsCount++;
+      }
+    }
+  }
+
+  await commitAdminPixelUpdates(updates, statsCount, lastPixelKey, lastColor);
+  alert(`Image filled pixels: ${changedCount}`);
 }
 
 addPixelBtn.addEventListener('click', ()=>adminApplyPixels('add'));
 removePixelBtn.addEventListener('click', ()=>adminApplyPixels('remove'));
+if (adminFillImageBtn) {
+  adminFillImageBtn.addEventListener('click', () => adminFillImage().catch(err => {
+    console.error(err);
+    alert("Could not fill image.");
+  }));
+}
 
 
 // Функция для отслеживания онлайн игроков
@@ -1968,6 +2263,7 @@ let templatePixelData = null;
 let isTemplateFollowActive = false;
 let isTemplateAutoColorActive = false;
 let savedTemplatesUnsubscribe = null;
+let editingTemplateId = null;
 
 function hasTemplateImage() {
   return !!overlay.getAttribute("src");
@@ -2118,8 +2414,12 @@ async function saveTemplateToAccount() {
     return alert("Template is too large to save. Use a smaller image.");
   }
 
-  const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const templateName = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : "template.png";
+  const id = editingTemplateId || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const existingSnapshot = editingTemplateId
+    ? await get(ref(rtdb, `templates/${auth.currentUser.uid}/${editingTemplateId}`))
+    : null;
+  const existing = existingSnapshot?.val() || {};
+  const templateName = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : (existing.name || "template.png");
   await set(ref(rtdb, `templates/${auth.currentUser.uid}/${id}`), {
     id,
     name: templateName.slice(0, 80),
@@ -2130,8 +2430,12 @@ async function saveTemplateToAccount() {
     visible: templateVisible,
     width: templatePixelData ? templatePixelData.width : 0,
     height: templatePixelData ? templatePixelData.height : 0,
-    createdAt: Date.now()
+    createdAt: existing.createdAt || Date.now(),
+    updatedAt: Date.now()
   });
+  editingTemplateId = id;
+  syncTemplateControls();
+  alert(existing.id ? "Template updated." : "Template saved.");
 }
 
 function renderSavedTemplates(data) {
@@ -2147,15 +2451,16 @@ function renderSavedTemplates(data) {
   }
 
   savedTemplatesList.innerHTML = templates.map(template => `
-    <div class="saved-template-item" data-template-id="${escapeHtml(template.id)}">
+    <div class="saved-template-item ${template.id === editingTemplateId ? "editing" : ""}" data-template-id="${escapeHtml(template.id)}">
       <img src="${template.src}" alt="">
       <div class="saved-template-meta">
         <div>${escapeHtml(template.name || "template")}</div>
-        <div>${escapeHtml(formatDateTime(template.createdAt))}</div>
+        <div>${escapeHtml(formatDateTime(template.updatedAt || template.createdAt))}</div>
         <div>X ${Number(template.x) || 0}, Y ${Number(template.y) || 0}</div>
       </div>
       <div class="saved-template-actions">
         <button type="button" data-template-action="load">Load</button>
+        <button type="button" data-template-action="edit">Edit</button>
         <button type="button" data-template-action="delete">Del</button>
       </div>
     </div>
@@ -2194,19 +2499,23 @@ if (savedTemplatesList) {
     const id = item.dataset.templateId;
     if (!id) return;
     if (button.dataset.templateAction === "delete") {
+      if (editingTemplateId === id) editingTemplateId = null;
       await remove(ref(rtdb, `templates/${auth.currentUser.uid}/${id}`));
+      syncTemplateControls();
       return;
     }
 
     const snapshot = await get(ref(rtdb, `templates/${auth.currentUser.uid}/${id}`));
     const template = snapshot.val();
     if (!template || !template.src) return;
+    editingTemplateId = button.dataset.templateAction === "edit" ? id : null;
     templateX = Number(template.x) || 0;
     templateY = Number(template.y) || 0;
     templateOpacity = Number.isFinite(Number(template.opacity)) ? Number(template.opacity) : 0.5;
     templateVisible = template.visible !== false;
     setTemplateSrc(template.src);
     syncTemplateControls();
+    setTemplatePanelOpen(true);
     saveTemplateState();
   });
 }
@@ -2228,6 +2537,7 @@ function syncTemplateControls() {
   autoTemplateColorBtn.classList.toggle("active", isTemplateAutoColorActive);
   followTemplateBtn.textContent = isTemplateFollowActive ? "Stop" : "Move";
   autoTemplateColorBtn.textContent = isTemplateAutoColorActive ? "Auto*" : "Auto";
+  saveTemplateBtn.textContent = editingTemplateId ? "Update" : "Save";
 }
 
 function setTemplatePanelOpen(open) {
@@ -2347,6 +2657,7 @@ clearTemplateBtn.addEventListener("click", () => {
   templateVisible = false;
   isTemplateFollowActive = false;
   isTemplateAutoColorActive = false;
+  editingTemplateId = null;
   localStorage.removeItem(templateStorageKey);
   syncTemplateControls();
   updateTemplatePosition();
@@ -2386,7 +2697,9 @@ window.addEventListener("resize", updateTemplatePosition);
 const oldRenderAll = renderAll;
 renderAll = function(){
   oldRenderAll();
+  scheduleVisiblePixelChunkSync();
   updateTemplatePosition();
 };
 
 loadTemplateState();
+scheduleVisiblePixelChunkSync();
