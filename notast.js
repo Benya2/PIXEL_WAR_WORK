@@ -28,6 +28,7 @@ const cursor = document.getElementById('cursor');
 const reloadTimerEl = document.getElementById('reloadTimer');
 const cooldownTimerEl = document.getElementById('cooldownTimer');
 const pencilToggle = document.getElementById('pencilToggle');
+const recentPixelsToggle = document.getElementById('recentPixelsToggle');
 const onlinePlayersEl = document.getElementById('onlinePlayers');
 const adminPanel = document.getElementById('adminPanel');
 const banUserBtn = document.getElementById('banUser');
@@ -331,6 +332,16 @@ window.addEventListener("blur", () => {
   isShiftPressed = false;
 });
 
+if (recentPixelsToggle) {
+  recentPixelsToggle.addEventListener("click", () => setRecentPixelsActive(!isRecentPixelsActive));
+  recentPixelsToggle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setRecentPixelsActive(!isRecentPixelsActive);
+    }
+  });
+}
+
 const colors = [
   "rgb(255, 255, 255)", "rgb(96, 64, 40)", "rgb(228, 228, 228)", "rgb(245, 223, 176)",
   "rgb(196, 196, 196)", "rgb(255, 248, 137)", "rgb(136, 136, 136)", "rgb(229, 217, 0)",
@@ -511,6 +522,14 @@ const activePixelChunkUnsubscribers = new Map();
 const activePixelChunkPixelKeys = new Map();
 let visibleChunkSyncTimeout = null;
 let realtimeChunkMigrationStarted = false;
+const RECENT_PIXEL_SLOTS = 600;
+const RECENT_PIXEL_EFFECT_MS = 1800;
+let isRecentPixelsActive = false;
+let recentPixelsUnsubscribe = null;
+let recentPixelsStartedAt = 0;
+let recentPixelAnimationFrame = null;
+let recentPixelEffects = [];
+const seenRecentPixelIds = new Set();
 let markers = [];
 
 const colorNormalizeCtx = document.createElement('canvas').getContext('2d');
@@ -541,6 +560,17 @@ function pixelChunkPathForWorld(x, y) {
 
 function pixelChunkPixelPath(x, y, key = cellKey(x, y)) {
   return `${pixelChunkPathForWorld(x, y)}/${key}`;
+}
+
+function recentPixelSlotKey(at) {
+  return `slot_${Math.floor(at / 100) % RECENT_PIXEL_SLOTS}`;
+}
+
+function rememberSeenRecentPixel(id) {
+  seenRecentPixelIds.add(id);
+  while (seenRecentPixelIds.size > 800) {
+    seenRecentPixelIds.delete(seenRecentPixelIds.values().next().value);
+  }
 }
 
 function safeKey(value) {
@@ -987,6 +1017,102 @@ function renderAll() {
   ctx.fillRect(hoverCellX, hoverCellY, gridCellSize, gridCellSize);
 
   ctx.setTransform(1,0,0,1,0,0);
+  drawRecentPixelEffects();
+}
+
+function drawRecentPixelEffects() {
+  if (!recentPixelEffects.length) return;
+  const now = Date.now();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  recentPixelEffects.forEach(effect => {
+    const age = now - effect.createdAt;
+    if (age < 0 || age > RECENT_PIXEL_EFFECT_MS) return;
+    const progress = age / RECENT_PIXEL_EFFECT_MS;
+    const alpha = Math.max(0, 1 - progress);
+    const screenX = (effect.x + gridCellSize / 2 - camX) * scale;
+    const screenY = (effect.y + gridCellSize / 2 - camY) * scale;
+    if (screenX < -80 || screenY < -80 || screenX > game.width + 80 || screenY > game.height + 80) return;
+
+    const color = isWhiteColor(effect.color) ? "#111111" : normalizeColor(effect.color);
+    const radius = 7 + progress * 34;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function requestRecentPixelAnimation() {
+  if (recentPixelAnimationFrame) return;
+  recentPixelAnimationFrame = requestAnimationFrame(() => {
+    recentPixelAnimationFrame = null;
+    const now = Date.now();
+    recentPixelEffects = recentPixelEffects.filter(effect => now - effect.createdAt <= RECENT_PIXEL_EFFECT_MS);
+    if (recentPixelEffects.length) {
+      renderAll();
+      requestRecentPixelAnimation();
+    }
+  });
+}
+
+function addRecentPixelEffect(event) {
+  const x = Number(event?.x);
+  const y = Number(event?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  recentPixelEffects.push({
+    x,
+    y,
+    color: event.color || "#000000",
+    createdAt: Date.now()
+  });
+  recentPixelEffects = recentPixelEffects.slice(-40);
+  renderAll();
+  requestRecentPixelAnimation();
+}
+
+function stopRecentPixelsWatch() {
+  if (recentPixelsUnsubscribe) recentPixelsUnsubscribe();
+  recentPixelsUnsubscribe = null;
+  recentPixelEffects = [];
+  seenRecentPixelIds.clear();
+  if (recentPixelAnimationFrame) cancelAnimationFrame(recentPixelAnimationFrame);
+  recentPixelAnimationFrame = null;
+  renderAll();
+}
+
+function startRecentPixelsWatch() {
+  if (recentPixelsUnsubscribe) return;
+  recentPixelsStartedAt = Date.now() - 15000;
+  recentPixelsUnsubscribe = onValue(ref(rtdb, "recentPixels"), snapshot => {
+    const rows = Object.values(snapshot.val() || {})
+      .filter(row => row && row.id && Number(row.at) >= recentPixelsStartedAt)
+      .sort((a, b) => Number(a.at || 0) - Number(b.at || 0));
+
+    rows.forEach(row => {
+      if (seenRecentPixelIds.has(row.id)) return;
+      rememberSeenRecentPixel(row.id);
+      addRecentPixelEffect(row);
+    });
+  }, err => {
+    console.error(err);
+  });
+}
+
+function setRecentPixelsActive(active) {
+  isRecentPixelsActive = !!active;
+  if (recentPixelsToggle) {
+    recentPixelsToggle.classList.toggle("active", isRecentPixelsActive);
+    recentPixelsToggle.setAttribute("aria-pressed", String(isRecentPixelsActive));
+  }
+  if (isRecentPixelsActive) startRecentPixelsWatch();
+  else stopRecentPixelsWatch();
 }
 
 // ===== Realtime Database pixels by visible chunks =====
@@ -1501,9 +1627,18 @@ async function placePixelWithHover(options = {}) {
     } else {
       const userSummary = getUserSummary();
       const placedAt = Date.now();
+      const recentId = `${recentPixelSlotKey(placedAt)}_${safeKey(userSummary.uid).slice(0, 12)}`;
       await update(ref(rtdb), {
         [pixelChunkPixelPath(x, y, pixelKey)]: { x, y, color: selectedColor },
         [`pixels/${pixelKey}`]: null,
+        [`recentPixels/${recentId}`]: {
+          id: recentId,
+          x,
+          y,
+          color: selectedColor,
+          at: placedAt,
+          uid: userSummary.uid
+        },
         [`pixelInfo/${pixelKey}`]: {
           x,
           y,
