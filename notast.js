@@ -387,6 +387,9 @@ let lastTouchY = 0;
 let touchMoved = false;
 let lastPinchDistance = 0;
 const touchPanThreshold = 8;
+const usePointerTouchControls = "PointerEvent" in window;
+const activeTouchPointers = new Map();
+let suppressNextClickUntil = 0;
 
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
@@ -434,10 +437,18 @@ function saveCameraStateNow() {
 loadCameraState();
 window.addEventListener("beforeunload", saveCameraStateNow);
 
-function screenToWorld(sx, sy) {
+function screenToCanvas(sx, sy) {
   const rect = game.getBoundingClientRect();
-  const x = (sx - rect.left)/scale + camX;
-  const y = (sy - rect.top)/scale + camY;
+  return [
+    (sx - rect.left) * (game.width / rect.width),
+    (sy - rect.top) * (game.height / rect.height)
+  ];
+}
+
+function screenToWorld(sx, sy) {
+  const [canvasX, canvasY] = screenToCanvas(sx, sy);
+  const x = canvasX / scale + camX;
+  const y = canvasY / scale + camY;
   return [x, y];
 }
 
@@ -456,12 +467,29 @@ function getTouchDistance(touches) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
+function getPointerCenter() {
+  const pointers = Array.from(activeTouchPointers.values());
+  const a = pointers[0];
+  const b = pointers[1];
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2
+  };
+}
+
+function getPointerDistance() {
+  const pointers = Array.from(activeTouchPointers.values());
+  const a = pointers[0];
+  const b = pointers[1];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 function zoomAtClientPoint(clientX, clientY, nextScale) {
   const [beforeX, beforeY] = screenToWorld(clientX, clientY);
-  const rect = game.getBoundingClientRect();
+  const [canvasX, canvasY] = screenToCanvas(clientX, clientY);
   scale = clamp(nextScale, MIN_SCALE, MAX_SCALE);
-  camX = beforeX - (clientX - rect.left) / scale;
-  camY = beforeY - (clientY - rect.top) / scale;
+  camX = beforeX - canvasX / scale;
+  camY = beforeY - canvasY / scale;
 }
 
 function snapToGrid(wx, wy) {
@@ -1016,7 +1044,125 @@ game.addEventListener('mousemove', (e)=>{
   tryPencilPlace();
 });
 
+game.addEventListener('pointerdown', (e) => {
+  if (!usePointerTouchControls || (e.pointerType !== "touch" && e.pointerType !== "pen")) return;
+  e.preventDefault();
+  suppressNextClickUntil = Date.now() + 700;
+  activeTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  try {
+    game.setPointerCapture?.(e.pointerId);
+  } catch (err) {
+    // Some mobile browsers can reject capture during synthetic or interrupted touch streams.
+  }
+
+  if (activeTouchPointers.size >= 2) {
+    touchMode = "pinch";
+    lastPinchDistance = getPointerDistance();
+    const center = getPointerCenter();
+    updateHoverFromPoint(center.x, center.y);
+    return;
+  }
+
+  touchMode = isPencilActive ? "draw" : "pan";
+  touchStartX = lastTouchX = e.clientX;
+  touchStartY = lastTouchY = e.clientY;
+  touchMoved = false;
+  lastPinchDistance = 0;
+  updateHoverFromPoint(e.clientX, e.clientY);
+
+  if (touchMode === "draw") {
+    if (stopTemplateFollow()) return;
+    tryPencilPlace();
+  }
+});
+
+game.addEventListener('pointermove', (e) => {
+  if (!usePointerTouchControls || !activeTouchPointers.has(e.pointerId)) return;
+  e.preventDefault();
+  suppressNextClickUntil = Date.now() + 700;
+  activeTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (activeTouchPointers.size >= 2) {
+    touchMode = "pinch";
+    const distance = getPointerDistance();
+    const center = getPointerCenter();
+    if (lastPinchDistance > 0 && distance > 0) {
+      zoomAtClientPoint(center.x, center.y, scale * (distance / lastPinchDistance));
+      lastPinchDistance = distance;
+      scheduleCameraSave();
+      updateHoverFromPoint(center.x, center.y);
+      renderAll();
+    }
+    return;
+  }
+
+  const totalDx = e.clientX - touchStartX;
+  const totalDy = e.clientY - touchStartY;
+  if (Math.hypot(totalDx, totalDy) > touchPanThreshold) {
+    touchMoved = true;
+  }
+
+  if (touchMode === "draw") {
+    updateHoverFromPoint(e.clientX, e.clientY);
+    tryPencilPlace();
+    return;
+  }
+
+  const dx = e.clientX - lastTouchX;
+  const dy = e.clientY - lastTouchY;
+  camX -= dx / scale;
+  camY -= dy / scale;
+  lastTouchX = e.clientX;
+  lastTouchY = e.clientY;
+  scheduleCameraSave();
+  updateHoverFromPoint(e.clientX, e.clientY);
+  renderAll();
+});
+
+function finishPointerTouch(e) {
+  if (!usePointerTouchControls || !activeTouchPointers.has(e.pointerId)) return;
+  e.preventDefault();
+  suppressNextClickUntil = Date.now() + 700;
+  const endedMode = touchMode;
+  const wasSingleTouch = activeTouchPointers.size === 1;
+  activeTouchPointers.delete(e.pointerId);
+  try {
+    game.releasePointerCapture?.(e.pointerId);
+  } catch (err) {}
+
+  if (activeTouchPointers.size === 1) {
+    const pointer = Array.from(activeTouchPointers.values())[0];
+    touchMode = isPencilActive ? "draw" : "pan";
+    touchStartX = lastTouchX = pointer.x;
+    touchStartY = lastTouchY = pointer.y;
+    touchMoved = false;
+    lastPinchDistance = 0;
+    updateHoverFromPoint(pointer.x, pointer.y);
+    return;
+  }
+
+  if (endedMode === "pan" && wasSingleTouch && !touchMoved) {
+    updateHoverFromPoint(touchStartX, touchStartY);
+    if (!stopTemplateFollow()) {
+      placePixelWithHover();
+    }
+  }
+
+  if (endedMode === "pan" || endedMode === "pinch") {
+    saveCameraStateNow();
+  }
+
+  touchMode = "";
+  touchMoved = false;
+  lastPinchDistance = 0;
+}
+
+game.addEventListener('pointerup', finishPointerTouch);
+game.addEventListener('pointercancel', finishPointerTouch);
+game.addEventListener('pointerleave', finishPointerTouch);
+
 game.addEventListener('touchstart', (e)=>{
+  if (usePointerTouchControls) return;
   e.preventDefault();
 
   if (e.touches.length === 2) {
@@ -1042,6 +1188,7 @@ game.addEventListener('touchstart', (e)=>{
 }, { passive: false });
 
 game.addEventListener('touchmove', (e)=>{
+  if (usePointerTouchControls) return;
   e.preventDefault();
 
   if (e.touches.length === 2) {
@@ -1084,7 +1231,9 @@ game.addEventListener('touchmove', (e)=>{
 }, { passive: false });
 
 game.addEventListener('touchend', (e)=>{
+  if (usePointerTouchControls) return;
   e.preventDefault();
+  suppressNextClickUntil = Date.now() + 700;
 
   if (e.touches.length === 1) {
     const touch = e.touches[0];
@@ -1114,7 +1263,9 @@ game.addEventListener('touchend', (e)=>{
 }, { passive: false });
 
 game.addEventListener('touchcancel', (e)=>{
+  if (usePointerTouchControls) return;
   e.preventDefault();
+  suppressNextClickUntil = Date.now() + 700;
   if (touchMode === "pan" || touchMode === "pinch") saveCameraStateNow();
   touchMode = "";
   touchMoved = false;
@@ -1205,6 +1356,10 @@ async function placePixelWithHover(options = {}) {
 }
 
 game.addEventListener('click', (e)=>{
+  if (Date.now() < suppressNextClickUntil) {
+    e.preventDefault();
+    return;
+  }
   if (isPanning || e.button !== 0) return;
   if (stopTemplateFollow()) {
     e.preventDefault();
