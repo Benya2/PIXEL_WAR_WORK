@@ -2135,6 +2135,24 @@ function parseAdminRegions(defaultWidth = 1, defaultHeight = 1) {
   }).filter(Boolean);
 }
 
+function parseAdminImageRegions(defaultWidth = 1, defaultHeight = 1) {
+  const regions = parseAdminRegions(defaultWidth, defaultHeight);
+  if (regions.length) return regions;
+
+  const fallbackValue = (teleportInput?.value || "").trim();
+  const [xCellStr, yCellStr] = fallbackValue.split(/\s+/);
+  const xCell = parseInt(xCellStr);
+  const yCell = parseInt(yCellStr);
+  if (Number.isNaN(xCell) || Number.isNaN(yCell)) return [];
+
+  return [{
+    xCell,
+    yCell,
+    wCell: Math.max(1, defaultWidth),
+    hCell: Math.max(1, defaultHeight)
+  }];
+}
+
 function parseCoords() {
   markers = [];
   const regions = parseAdminRegions();
@@ -2297,8 +2315,8 @@ async function adminFillImage() {
 
   const processedTemplate = await quantizeTemplateImage(await getFileDataUrl(file));
   const imagePixels = processedTemplate.pixels;
-  const regions = parseAdminRegions(imagePixels.width, imagePixels.height);
-  if (!regions.length) return alert("Enter coordinates: X Y [W H].");
+  const regions = parseAdminImageRegions(imagePixels.width, imagePixels.height);
+  if (!regions.length) return alert("Enter coordinates: X Y [W H], or put X Y in the teleport field.");
   const plannedPixelCount = regions.reduce((total, region) => total + region.wCell * region.hCell, 0);
   if (!confirmLargeAdminFill(plannedPixelCount)) return;
 
